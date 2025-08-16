@@ -34,3 +34,8 @@ export interface ApiResponse<T> {
   timestamp: string;
 }
 
+export interface UpdateProfileRequest {
+  firstName: string;
+  lastName: string;
+  email: string;
+}

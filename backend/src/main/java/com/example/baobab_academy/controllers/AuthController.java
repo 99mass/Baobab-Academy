@@ -4,6 +4,7 @@ import com.example.baobab_academy.dtos.ApiResponse;
 import com.example.baobab_academy.dtos.AuthResponse;
 import com.example.baobab_academy.dtos.LoginRequest;
 import com.example.baobab_academy.dtos.RegisterRequest;
+import com.example.baobab_academy.dtos.UpdateProfileRequest;
 import com.example.baobab_academy.dtos.UserResponse;
 import com.example.baobab_academy.services.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -79,5 +80,19 @@ public class AuthController {
                     .status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("Token invalide"));
         }
+    }
+
+    @Operation(summary = "Mettre à jour le profil de l'utilisateur")
+    @PutMapping("/profile")
+    public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
+            @Valid @RequestBody UpdateProfileRequest request,
+            Authentication authentication) {
+
+        String currentEmail = authentication.getName();
+        log.info("Mise à jour du profil pour l'utilisateur: {}", currentEmail);
+
+        UserResponse updatedUser = authService.updateProfile(currentEmail, request);
+
+        return ResponseEntity.ok(ApiResponse.success("Profil mis à jour avec succès", updatedUser));
     }
 }

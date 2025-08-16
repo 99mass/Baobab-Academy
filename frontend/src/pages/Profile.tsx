@@ -1,39 +1,127 @@
-import React, { useState } from 'react';
-import { BookOpen, Clock, Award, TrendingUp, Edit } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BookOpen, Clock, Award, TrendingUp, Edit, Save, X, AlertCircle, Loader2 } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { authService } from '../services/authService';
 import CourseCard from '../components/CourseCard';
-import { mockUser, mockCourses } from '../data/mockData';
+import { mockCourses } from '../data/mockData';
+
+interface UpdateProfileData {
+  firstName: string;
+  lastName: string;
+  email: string;
+}
 
 export default function Profile() {
+  const { user, refreshUser } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [isEditing, setIsEditing] = useState(false);
-  const [userInfo, setUserInfo] = useState({
-    firstName: mockUser.firstName,
-    lastName: mockUser.lastName,
-    email: mockUser.email,
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState('');
+  const [updateSuccess, setUpdateSuccess] = useState(false);
+  
+  const [userInfo, setUserInfo] = useState<UpdateProfileData>({
+    firstName: '',
+    lastName: '',
+    email: '',
   });
 
+  // Initialiser les données utilisateur
+  useEffect(() => {
+    if (user) {
+      setUserInfo({
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+      });
+    }
+  }, [user]);
+
+  // Données mockées pour les cours (en attendant l'intégration backend)
   const enrolledCourses = mockCourses.filter(course => 
-    mockUser.enrolledCourses.includes(course.id)
+    // Ici vous pourrez utiliser les vraies données de l'utilisateur
+    [1, 2, 3].includes(course.id )
   );
 
   const completedCourses = mockCourses.filter(course => 
-    mockUser.completedCourses.includes(course.id)
+    [1].includes(course.id)
   );
 
   const inProgressCourses = enrolledCourses.filter(course => 
     course.progress && course.progress > 0 && course.progress < 100
   );
 
-  const handleSaveProfile = () => {
-    console.log('Saving profile:', userInfo);
-    setIsEditing(false);
+  const handleSaveProfile = async () => {
+    if (!user) return;
+
+    setIsUpdating(true);
+    setUpdateError('');
+    setUpdateSuccess(false);
+
+    try {
+      // Validation côté client
+      if (!userInfo.firstName.trim() || !userInfo.lastName.trim()) {
+        throw new Error('Le prénom et le nom sont obligatoires');
+      }
+
+      if (!userInfo.email.trim()) {
+        throw new Error('L\'email est obligatoire');
+      }
+
+      // Appel API pour mise à jour du profil
+      console.log('🔄 Mise à jour du profil:', userInfo);
+      
+      const response = await authService.updateProfile(userInfo);
+      
+      if (response.success && response.data) {
+        // Mise à jour du localStorage avec les nouvelles données
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+        const updatedUser = {
+          ...currentUser,
+          ...response.data
+        };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+      
+      // Rafraîchir les données utilisateur
+      await refreshUser();
+      
+      setUpdateSuccess(true);
+      setIsEditing(false);
+      
+      // Masquer le message de succès après 3 secondes
+      setTimeout(() => setUpdateSuccess(false), 3000);
+      
+    } catch (error: any) {
+      console.error('Erreur lors de la mise à jour du profil:', error);
+      setUpdateError(error.message || 'Erreur lors de la mise à jour du profil');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setUserInfo({
-      ...userInfo,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    setUserInfo(prev => ({
+      ...prev,
+      [name]: value,
+    }));
+    
+    // Effacer l'erreur quand l'utilisateur tape
+    if (updateError) {
+      setUpdateError('');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    if (user) {
+      setUserInfo({
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+      });
+    }
+    setIsEditing(false);
+    setUpdateError('');
   };
 
   const getCompletionRate = () => {
@@ -41,67 +129,131 @@ export default function Profile() {
     return Math.round((completedCourses.length / enrolledCourses.length) * 100);
   };
 
+  const formatMemberSince = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR', { 
+      year: 'numeric', 
+      month: 'long' 
+    });
+  };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-neutral flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-gray-600">Chargement du profil...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-neutral">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Messages de feedback */}
+        {updateSuccess && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center space-x-2">
+            <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+              <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <p className="text-sm text-green-700 font-medium">Profil mis à jour avec succès !</p>
+          </div>
+        )}
+
+        {updateError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center space-x-2">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+            <p className="text-sm text-red-700">{updateError}</p>
+          </div>
+        )}
+
         {/* Profile Header */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-8">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center space-x-6">
               {/* Avatar */}
               <div className="relative">
-                <img src="./avatar.png" className="w-24 h-24" alt="" />
+                <div className="w-20 h-20 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                  {user.firstName.charAt(0)}{user.lastName.charAt(0)}
+                </div>
               </div>
 
               {/* User Info */}
-              <div>
+              <div className="flex-1">
                 {isEditing ? (
-                  <div className="space-y-3">
-                    <div className="flex space-x-3">
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Prénom
+                        </label>
+                        <input
+                          type="text"
+                          name="firstName"
+                          value={userInfo.firstName}
+                          onChange={handleInputChange}
+                          disabled={isUpdating}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors disabled:opacity-50"
+                          placeholder="Votre prénom"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Nom
+                        </label>
+                        <input
+                          type="text"
+                          name="lastName"
+                          value={userInfo.lastName}
+                          onChange={handleInputChange}
+                          disabled={isUpdating}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors disabled:opacity-50"
+                          placeholder="Votre nom"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Adresse email
+                      </label>
                       <input
-                        type="text"
-                        name="firstName"
-                        value={userInfo.firstName}
+                        type="email"
+                        name="email"
+                        value={userInfo.email}
                         onChange={handleInputChange}
-                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
-                        placeholder="Prénom"
-                      />
-                      <input
-                        type="text"
-                        name="lastName"
-                        value={userInfo.lastName}
-                        onChange={handleInputChange}
-                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
-                        placeholder="Nom"
+                        disabled={isUpdating}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors disabled:opacity-50"
+                        placeholder="votre.email@exemple.com"
+                        required
                       />
                     </div>
-                    <input
-                      type="email"
-                      name="email"
-                      value={userInfo.email}
-                      onChange={handleInputChange}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
-                      placeholder="Email"
-                    />
                   </div>
                 ) : (
                   <>
                     <h1 className="text-2xl font-bold text-textPrimary mb-2">
-                      {userInfo.firstName} {userInfo.lastName}
+                      {user.firstName} {user.lastName}
                     </h1>
-                    <p className="text-gray-600 mb-4">{userInfo.email}</p>
-                    <div className="flex items-center space-x-4 text-sm text-gray-500">
+                    <p className="text-gray-600 mb-1 text-sm">{user.email}</p>
+                    {/* <p className="text-sm text-gray-500 mb-4">
+                      Membre depuis {formatMemberSince(user.createdAt)}
+                    </p> */}
+                    <div className="flex items-center space-x-6 text-sm text-gray-500">
                       <span className="flex items-center space-x-2">
                         <BookOpen className="w-4 h-4" />
-                        <span>{enrolledCourses.length} cours</span>
+                        <span>{enrolledCourses.length} cours inscrits</span>
                       </span>
                       <span className="flex items-center space-x-2">
                         <Award className="w-4 h-4" />
                         <span>{completedCourses.length} terminés</span>
                       </span>
                       <span className="flex items-center space-x-2">
-                        <Clock className="w-4 h-4" />
-                        <span>{mockUser.totalStudyTime}h d'étude</span>
+                        <TrendingUp className="w-4 h-4" />
+                        <span>{getCompletionRate()}% de réussite</span>
                       </span>
                     </div>
                   </>
@@ -109,21 +261,34 @@ export default function Profile() {
               </div>
             </div>
 
-            {/* Action Button */}
+            {/* Action Buttons */}
             <div className="mt-6 lg:mt-0">
               {isEditing ? (
-                <div className="flex space-x-3">
+                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
                   <button
-                    onClick={() => setIsEditing(false)}
-                    className="px-6 py-3 border border-gray-300 text-textPrimary rounded-lg hover:bg-gray-50 transition-colors"
+                    onClick={handleCancelEdit}
+                    disabled={isUpdating}
+                    className="flex items-center justify-center space-x-2 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Annuler
+                    <X className="w-4 h-4" />
+                    <span>Annuler</span>
                   </button>
                   <button
                     onClick={handleSaveProfile}
-                    className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium"
+                    disabled={isUpdating}
+                    className="flex items-center justify-center space-x-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Sauvegarder
+                    {isUpdating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Sauvegarde...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        <span>Sauvegarder</span>
+                      </>
+                    )}
                   </button>
                 </div>
               ) : (
@@ -135,6 +300,20 @@ export default function Profile() {
                   <span>Modifier le profil</span>
                 </button>
               )}
+            </div>
+          </div>
+
+          {/* Role Badge */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="flex items-center space-x-3">
+              <span className="text-sm font-medium text-gray-600">Rôle :</span>
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                user.role === 'ADMIN' 
+                  ? 'bg-purple-100 text-purple-700' 
+                  : 'bg-blue-100 text-blue-700'
+              }`}>
+                {user.role === 'ADMIN' ? 'Administrateur' : 'Étudiant'}
+              </span>
             </div>
           </div>
         </div>
@@ -169,7 +348,7 @@ export default function Profile() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Temps d'étude</p>
-                <p className="text-3xl font-bold text-textPrimary">{mockUser.totalStudyTime}h</p>
+                <p className="text-3xl font-bold text-textPrimary">42h</p>
               </div>
               <div className="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center">
                 <Clock className="w-6 h-6 text-accent" />
@@ -242,22 +421,29 @@ export default function Profile() {
             {/* Recent Achievements */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
               <h2 className="text-xl font-semibold text-textPrimary mb-6">Accomplissements récents</h2>
-              <div className="space-y-4">
-                {completedCourses.slice(0, 3).map((course) => (
-                  <div key={course.id} className="flex items-center space-x-4 p-4 bg-success/5 rounded-lg">
-                    <div className="w-12 h-12 bg-success rounded-full flex items-center justify-center">
-                      <Award className="w-6 h-6 text-white" />
+              {completedCourses.length > 0 ? (
+                <div className="space-y-4">
+                  {completedCourses.slice(0, 3).map((course) => (
+                    <div key={course.id} className="flex items-center space-x-4 p-4 bg-success/5 rounded-lg">
+                      <div className="w-12 h-12 bg-success rounded-full flex items-center justify-center">
+                        <Award className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-textPrimary">Cours terminé</h3>
+                        <p className="text-sm text-gray-600">{course.title}</p>
+                      </div>
+                      <div className="text-right text-sm text-gray-500">
+                        Il y a 2 jours
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-medium text-textPrimary">Cours terminé</h3>
-                      <p className="text-sm text-gray-600">{course.title}</p>
-                    </div>
-                    <div className="text-right text-sm text-gray-500">
-                      Il y a 2 jours
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Award className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">Aucun cours terminé pour le moment</p>
+                </div>
+              )}
             </div>
           </div>
         )}

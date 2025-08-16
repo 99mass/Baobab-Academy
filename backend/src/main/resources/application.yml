@@ -1,3 +1,65 @@
+# # application.yml
+# spring:
+#   data:
+#     mongodb:
+#       uri: mongodb+srv://diopsamba408:Keg01EKDjuOgk0LP@baobab-academy.llpcqcb.mongodb.net/baobab_academy?retryWrites=true&w=majority&appName=baobab-academy
+#       auto-index-creation: true
+#   servlet:
+#     multipart:
+#       max-file-size: 10MB
+#       max-request-size: 10MB
+
+#   # Configuration Jackson pour éviter les erreurs de sérialisation
+#   jackson:
+#     serialization:
+#       fail-on-empty-beans: false
+#       write-dates-as-timestamps: false
+#     default-property-inclusion: NON_NULL
+
+# server:
+#   port: 8080
+
+# app:
+#   jwt:
+#     secret: baobabAcademySecretKeyForJWTTokenGenerationMustBe32CharactersLong2024
+#     expiration: 86400000 # 24 heures
+
+# cors:
+#   allowed-origins: http://localhost:3000,http://localhost:3001,http://localhost:5173
+
+# file:
+#   upload-dir: ./uploads
+
+# # Configuration Cloudinary
+# cloudinary:
+#   cloud-name: dnbyf2jqg
+#   api-key: 692874425739111
+#   api-secret: 4DLEIJt_ImEVWVjKXDO_7NDzuko
+
+# springdoc:
+#   api-docs:
+#     enabled: true
+#   swagger-ui:
+#     enabled: true
+
+# logging:
+#   level:
+#     com.example.baobab_academy: DEBUG
+#     org.springframework.data.mongodb: INFO
+#     org.springframework.security: INFO
+#     org.mongodb.driver: INFO
+#     # Activer les logs Swagger pour debug
+#     org.springdoc: DEBUG
+#     io.swagger: DEBUG
+
+# management:
+#   endpoints:
+#     web:
+#       exposure:
+#         include: health,info,metrics
+#   endpoint:
+#     health:
+#       show-details: always
 # application.yml
 spring:
   data:
@@ -16,6 +78,17 @@ spring:
       write-dates-as-timestamps: false
     default-property-inclusion: NON_NULL
 
+  # Configuration MVC
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+
+  # Configuration des ressources statiques
+  web:
+    resources:
+      static-locations: classpath:/static/
+      add-mappings: true
+
 server:
   port: 8080
 
@@ -30,6 +103,12 @@ cors:
 file:
   upload-dir: ./uploads
 
+# Configuration Cloudinary
+cloudinary:
+  cloud-name: dnbyf2jqg
+  api-key: 692874425739111
+  api-secret: 4DLEIJt_ImEVWVjKXDO_7NDzuko
+
 springdoc:
   api-docs:
     enabled: true
@@ -39,12 +118,11 @@ springdoc:
 logging:
   level:
     com.example.baobab_academy: DEBUG
+    org.springframework.web.servlet.DispatcherServlet: DEBUG
+    org.springframework.web.servlet.handler: DEBUG
+    org.springframework.security: DEBUG
     org.springframework.data.mongodb: INFO
-    org.springframework.security: INFO
     org.mongodb.driver: INFO
-    # Activer les logs Swagger pour debug
-    org.springdoc: DEBUG
-    io.swagger: DEBUG
 
 management:
   endpoints:

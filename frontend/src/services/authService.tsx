@@ -1,7 +1,7 @@
 // services/authService.ts
 import axios from 'axios';
 import type { AxiosResponse } from 'axios';
-import type { RegisterRequest, LoginRequest, AuthResponse, UserResponse, ApiResponse } from '../types/auth';
+import type { RegisterRequest, LoginRequest, AuthResponse, UserResponse, ApiResponse, UpdateProfileRequest } from '../types/auth';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
@@ -63,6 +63,13 @@ export const authService = {
 
   async verifyToken(): Promise<ApiResponse<null>> {
     const response: AxiosResponse<ApiResponse<null>> = await authAPI.get('/verify');
+    return response.data;
+  },
+
+   async updateProfile(data: UpdateProfileRequest): Promise<ApiResponse<UserResponse>> {
+    console.log('📤 Envoi de la requête updateProfile:', data);
+    const response: AxiosResponse<ApiResponse<UserResponse>> = await authAPI.put('/profile', data);
+    console.log('📥 Réponse updateProfile reçue:', response.data);
     return response.data;
   },
 };

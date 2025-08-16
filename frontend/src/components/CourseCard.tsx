@@ -21,6 +21,26 @@ export default function CourseCard({ course, variant = 'default' }: CourseCardPr
     }
   };
 
+  const formatDuration = (duration: string) => {
+    const totalMinutes = parseInt(duration, 10);
+    if (isNaN(totalMinutes) || totalMinutes <= 0) {
+      return '';
+    }
+
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    let result = '';
+    if (hours > 0) {
+      result += `${hours}h `;
+    }
+    if (minutes > 0) {
+      result += `${minutes}min`;
+    }
+
+    return result.trim();
+  };
+
   if (variant === 'compact') {
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow p-4">
@@ -35,7 +55,7 @@ export default function CourseCard({ course, variant = 'default' }: CourseCardPr
             <div className="flex items-center space-x-4 text-sm text-gray-500">
               <span className="flex items-center space-x-1">
                 <Clock className="w-4 h-4" />
-                <span>{course.duration}</span>
+                <span>{formatDuration(course.duration)}</span>
               </span>
               <span className={`px-2 py-1 rounded-full text-xs ${getLevelColor(course.level)}`}>
                 {course.level}
@@ -108,7 +128,7 @@ export default function CourseCard({ course, variant = 'default' }: CourseCardPr
         <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
           <span className="flex items-center space-x-1">
             <Clock className="w-4 h-4" />
-            <span>{course.duration}</span>
+            <span>{formatDuration(course.duration)}</span>
           </span>
           <span className="flex items-center space-x-1">
             <BookOpen className="w-4 h-4" />

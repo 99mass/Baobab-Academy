@@ -3,6 +3,7 @@ package com.example.baobab_academy.services;
 import com.example.baobab_academy.dtos.AuthResponse;
 import com.example.baobab_academy.dtos.LoginRequest;
 import com.example.baobab_academy.dtos.RegisterRequest;
+import com.example.baobab_academy.dtos.UpdateProfileRequest;
 import com.example.baobab_academy.dtos.UserResponse;
 import com.example.baobab_academy.exceptions.EmailAlreadyExistsException;
 import com.example.baobab_academy.exceptions.InvalidCredentialsException;
@@ -52,7 +53,7 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
-        user.setRole(UserRole.USER); 
+        user.setRole(UserRole.USER);
 
         // Sauvegarder l'utilisateur
         User savedUser = userRepository.save(user);
@@ -60,8 +61,7 @@ public class AuthService {
 
         // Authentifier automatiquement l'utilisateur
         Authentication authentication = authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-        );
+                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
 
         // Générer le token JWT
         String token = tokenProvider.generateToken(authentication);
@@ -77,12 +77,11 @@ public class AuthService {
         try {
             // Authentifier l'utilisateur
             Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-            );
+                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
 
             // Récupérer l'utilisateur
             User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new InvalidCredentialsException("Email ou mot de passe incorrect"));
+                    .orElseThrow(() -> new InvalidCredentialsException("Email ou mot de passe incorrect"));
 
             // Générer le token JWT
             String token = tokenProvider.generateToken(authentication);
@@ -101,8 +100,47 @@ public class AuthService {
 
     public UserResponse getCurrentUser(String email) {
         User user = userRepository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-        
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
         return modelMapper.map(user, UserResponse.class);
+    }
+
+    public UserResponse updateProfile(String currentEmail, UpdateProfileRequest request) {
+        User user = userRepository.findByEmail(currentEmail)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+        // Vérifier si l'email est déjà utilisé par un autre utilisateur
+        if (!user.getEmail().equals(request.getEmail())) {
+            if (userRepository.existsByEmail(request.getEmail())) {
+                throw new EmailAlreadyExistsException("Cet email est déjà utilisé");
+            }
+        }
+
+        // Mettre à jour les informations
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
+        user.setEmail(request.getEmail());
+
+        // Sauvegarder
+        User updatedUser = userRepository.save(user);
+
+        log.info("Profil mis à jour pour l'utilisateur: {}", updatedUser.getEmail());
+
+        return convertToUserResponse(updatedUser);
+    }
+
+    private UserResponse convertToUserResponse(User user) {
+        UserResponse userResponse = new UserResponse();
+        userResponse.setId(user.getId());
+        userResponse.setEmail(user.getEmail());
+        userResponse.setFirstName(user.getFirstName());
+        userResponse.setLastName(user.getLastName());
+        userResponse.setRole(user.getRole());
+        userResponse.setCreatedAt(user.getCreatedAt());
+
+        log.debug("Conversion User vers UserResponse - ID: {}, Email: {}, Rôle: {}",
+                user.getId(), user.getEmail(), user.getRole());
+
+        return userResponse;
     }
 }
