@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   Menu,
   X,
-  User,
+  User as UserIcon,
   BookOpen,
   Home,
   ChevronDown,
@@ -15,22 +15,35 @@ import {
   Briefcase,
   LogOut,
 } from "lucide-react";
+import { useAuth } from "../hooks/useAuth"; 
+import type { User as UserType } from "../types";
 
 interface HeaderProps {
   isAuthenticated?: boolean;
   userRole?: "student" | "admin";
+  user?: UserType;
 }
 
 export default function Header({
   isAuthenticated = false,
   userRole = "student",
+  user,
 }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [isCoursesDropdownOpen, setIsCoursesDropdownOpen] =
     React.useState(false);
   const location = useLocation();
+  
+  const { logout } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Fonction de déconnexion
+  const handleLogout = () => {
+    console.log('🔌 Déconnexion en cours...');
+    logout();
+    setIsMenuOpen(false);
+  };
 
   // Catégories de cours avec icônes
   const courseCategories = [
@@ -89,7 +102,7 @@ export default function Header({
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-1">
+          <nav className="hidden md:flex items-center space-x-2">
             <Link
               to="/"
               className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
@@ -192,8 +205,8 @@ export default function Header({
                 {/* Dropdown Profil */}
                 <div className="relative group">
                   <button className="flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-700 hover:text-primary transition-colors">
-                    <User className="w-4 h-4" />
-                    <span>Profil</span>
+                    <UserIcon className="w-4 h-4" />
+                    <span>{user?.firstName?.charAt(0).toLocaleUpperCase()}{user?.lastName?.charAt(0).toLocaleUpperCase()}</span>
                     <ChevronDown className="w-4 h-4" />
                   </button>
 
@@ -203,11 +216,14 @@ export default function Header({
                       to="/profile"
                       className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors space-x-2"
                     >
-                      <User className="w-4 h-4 text-primary" />
+                      <UserIcon className="w-4 h-4 text-primary" />
                       <span>Mon Profil</span>
                     </Link>
                     <hr className="my-2 border-gray-100" />
-                    <button className="flex items-center w-full text-left px-4 py-2 text-red-600 hover:bg-gray-50 transition-colors space-x-2">
+                    <button 
+                      onClick={handleLogout}
+                      className="flex items-center w-full text-left px-4 py-2 text-red-600 hover:bg-gray-50 transition-colors space-x-2"
+                    >
                       <LogOut className="w-4 h-4" />
                       <span>Déconnexion</span>
                     </button>
@@ -313,8 +329,8 @@ export default function Header({
                   Mes Cours
                 </Link>
                 <button
+                  onClick={handleLogout}
                   className="block w-full text-left px-3 py-2 rounded-lg text-red-600 hover:bg-gray-100 transition-colors"
-                  onClick={() => setIsMenuOpen(false)}
                 >
                   Déconnexion
                 </button>

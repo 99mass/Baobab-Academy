@@ -67,11 +67,13 @@ public class SecurityConfig {
                         .requestMatchers("/api/courses/public/**").permitAll()
                         .requestMatchers("/api/categories/**").permitAll()
 
-                        // Documentation Swagger
-                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
-
-                        // Health check
-                        .requestMatchers("/actuator/health").permitAll()
+                        // Documentation Swagger - ENDPOINTS COMPLETS
+                        .requestMatchers("/swagger-ui/**").permitAll()
+                        .requestMatchers("/swagger-ui.html").permitAll()
+                        .requestMatchers("/v3/api-docs/**").permitAll()
+                        .requestMatchers("/v3/api-docs").permitAll()
+                        .requestMatchers("/swagger-resources/**").permitAll()
+                        .requestMatchers("/webjars/**").permitAll()
 
                         // Endpoints admin uniquement
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
@@ -100,7 +102,12 @@ public class SecurityConfig {
         if (allowedOrigins != null) {
             configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
         } else {
-            configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:3001"));
+            // Ajout du port 5173 pour Vite
+            configuration.setAllowedOrigins(List.of(
+                    "http://localhost:3000",
+                    "http://localhost:3001",
+                    "http://localhost:5173" 
+            ));
         }
 
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
