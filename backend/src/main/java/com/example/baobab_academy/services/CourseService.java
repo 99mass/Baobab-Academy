@@ -6,6 +6,7 @@ import com.example.baobab_academy.dtos.CourseResponse;
 import com.example.baobab_academy.dtos.CourseUpdateRequest;
 import com.example.baobab_academy.dtos.LessonCreateRequest;
 import com.example.baobab_academy.models.*;
+import com.example.baobab_academy.models.enums.ContentType;
 import com.example.baobab_academy.models.enums.CourseStatus;
 import com.example.baobab_academy.repositories.*;
 import lombok.RequiredArgsConstructor;
@@ -161,6 +162,30 @@ public class CourseService {
     }
 
     /**
+     * Met à jour un chapitre
+     */
+    public Chapter updateChapter(String chapterId, ChapterCreateRequest request, String instructorId) {
+        log.info("✏️ Mise à jour du chapitre: {}", chapterId);
+
+        Chapter chapter = chapterRepository.findById(chapterId)
+                .orElseThrow(() -> new RuntimeException("Chapitre non trouvé"));
+
+        // Vérifier que l'utilisateur est le créateur du cours
+        Course course = courseRepository.findById(chapter.getCourseId())
+                .orElseThrow(() -> new RuntimeException("Cours non trouvé"));
+
+        if (!course.getInstructorId().equals(instructorId)) {
+            throw new RuntimeException("Accès non autorisé à ce cours");
+        }
+
+        chapter.setTitle(request.getTitle());
+        Chapter updatedChapter = chapterRepository.save(chapter);
+
+        log.info("✅ Chapitre mis à jour: {}", updatedChapter.getId());
+        return updatedChapter;
+    }
+
+    /**
      * Ajoute une leçon à un chapitre
      */
     public Lesson addLessonToChapter(String chapterId, LessonCreateRequest request, String instructorId) {
@@ -201,7 +226,7 @@ public class CourseService {
     }
 
     /**
-     * Upload une vidéo pour une leçon
+     *  Upload une vidéo locale pour une leçon
      */
     public Lesson uploadLessonVideo(String lessonId, MultipartFile file, String instructorId) throws IOException {
         log.info("🎥 Upload vidéo pour la leçon: {}", lessonId);
@@ -220,8 +245,8 @@ public class CourseService {
             throw new RuntimeException("Accès non autorisé à ce cours");
         }
 
-        // Supprimer l'ancienne vidéo si elle existe
-        if (lesson.getVideoUrl() != null) {
+        // Supprimer l'ancienne vidéo si elle existe et qu'elle vient de Cloudinary
+        if (lesson.getVideoUrl() != null && lesson.getVideoUrl().contains("cloudinary.com")) {
             String oldPublicId = cloudinaryService.extractPublicIdFromUrl(lesson.getVideoUrl());
             if (oldPublicId != null) {
                 cloudinaryService.deleteVideo(oldPublicId);
@@ -235,6 +260,80 @@ public class CourseService {
         Lesson updatedLesson = lessonRepository.save(lesson);
 
         log.info("✅ Vidéo de leçon uploadée: {}", result.getSecureUrl());
+        return updatedLesson;
+    }
+
+    /**
+     *  Définir l'URL d'une vidéo externe (YouTube, Vimeo, etc.)
+     */
+    public Lesson setLessonVideoUrl(String lessonId, String videoUrl, String instructorId) {
+        log.info("🔗 Définition URL vidéo externe pour la leçon: {} - URL: {}", lessonId, videoUrl);
+
+        Lesson lesson = lessonRepository.findById(lessonId)
+                .orElseThrow(() -> new RuntimeException("Leçon non trouvée"));
+
+        // Vérifier l'autorisation
+        Chapter chapter = chapterRepository.findById(lesson.getChapterId())
+                .orElseThrow(() -> new RuntimeException("Chapitre non trouvé"));
+        
+        Course course = courseRepository.findById(chapter.getCourseId())
+                .orElseThrow(() -> new RuntimeException("Cours non trouvé"));
+
+        if (!course.getInstructorId().equals(instructorId)) {
+            throw new RuntimeException("Accès non autorisé à ce cours");
+        }
+
+        // Si on remplace une vidéo Cloudinary par une URL externe, supprimer l'ancienne
+        if (lesson.getVideoUrl() != null && lesson.getVideoUrl().contains("cloudinary.com")) {
+            String oldPublicId = cloudinaryService.extractPublicIdFromUrl(lesson.getVideoUrl());
+            if (oldPublicId != null) {
+                cloudinaryService.deleteVideo(oldPublicId);
+            }
+        }
+
+        // Définir la nouvelle URL
+        lesson.setVideoUrl(videoUrl);
+        Lesson updatedLesson = lessonRepository.save(lesson);
+
+        log.info("✅ URL vidéo externe définie: {}", videoUrl);
+        return updatedLesson;
+    }
+
+    /**
+     *  Upload un document pour une leçon
+     */
+    public Lesson uploadLessonDocument(String lessonId, MultipartFile file, String instructorId) throws IOException {
+        log.info("📄 Upload document pour la leçon: {}", lessonId);
+
+        Lesson lesson = lessonRepository.findById(lessonId)
+                .orElseThrow(() -> new RuntimeException("Leçon non trouvée"));
+
+        // Vérifier l'autorisation
+        Chapter chapter = chapterRepository.findById(lesson.getChapterId())
+                .orElseThrow(() -> new RuntimeException("Chapitre non trouvé"));
+        
+        Course course = courseRepository.findById(chapter.getCourseId())
+                .orElseThrow(() -> new RuntimeException("Cours non trouvé"));
+
+        if (!course.getInstructorId().equals(instructorId)) {
+            throw new RuntimeException("Accès non autorisé à ce cours");
+        }
+
+        // Supprimer l'ancien document si il existe
+        if (lesson.getDocumentUrl() != null) {
+            String oldPublicId = cloudinaryService.extractPublicIdFromUrl(lesson.getDocumentUrl());
+            if (oldPublicId != null) {
+                cloudinaryService.deleteDocument(oldPublicId);
+            }
+        }
+
+        // Upload le nouveau document
+        CloudinaryService.CloudinaryUploadResult result = cloudinaryService.uploadLessonDocument(file, course.getId(), lessonId);
+        
+        lesson.setDocumentUrl(result.getSecureUrl());
+        Lesson updatedLesson = lessonRepository.save(lesson);
+
+        log.info("✅ Document de leçon uploadé: {}", result.getSecureUrl());
         return updatedLesson;
     }
 
@@ -298,10 +397,18 @@ public class CourseService {
             List<Lesson> lessons = lessonRepository.findByChapterIdOrderByOrderIndex(chapter.getId());
             for (Lesson lesson : lessons) {
                 // Supprimer les médias de la leçon
-                if (lesson.getVideoUrl() != null) {
+                if (lesson.getVideoUrl() != null && lesson.getVideoUrl().contains("cloudinary.com")) {
                     String videoPublicId = cloudinaryService.extractPublicIdFromUrl(lesson.getVideoUrl());
                     if (videoPublicId != null) {
                         cloudinaryService.deleteVideo(videoPublicId);
+                    }
+                }
+                
+                // 🆕 Supprimer les documents
+                if (lesson.getDocumentUrl() != null) {
+                    String documentPublicId = cloudinaryService.extractPublicIdFromUrl(lesson.getDocumentUrl());
+                    if (documentPublicId != null) {
+                        cloudinaryService.deleteDocument(documentPublicId);
                     }
                 }
                 
@@ -320,6 +427,126 @@ public class CourseService {
         courseRepository.delete(course);
         
         log.info("✅ Cours supprimé: {}", courseId);
+    }
+
+    //  Supprimer un chapitre et toutes ses leçons
+    public void deleteChapter(String chapterId, String instructorId) {
+        log.info("🗑️ Suppression du chapitre: {}", chapterId);
+
+        Chapter chapter = chapterRepository.findById(chapterId)
+                .orElseThrow(() -> new RuntimeException("Chapitre non trouvé"));
+
+        // Vérifier l'autorisation via le cours
+        Course course = courseRepository.findById(chapter.getCourseId())
+                .orElseThrow(() -> new RuntimeException("Cours non trouvé"));
+
+        if (!course.getInstructorId().equals(instructorId)) {
+            throw new RuntimeException("Accès non autorisé à ce cours");
+        }
+
+        // Supprimer toutes les leçons du chapitre
+        List<Lesson> lessons = lessonRepository.findByChapterIdOrderByOrderIndex(chapterId);
+        for (Lesson lesson : lessons) {
+            deleteLessonMedia(lesson); // Supprimer les médias
+            userProgressRepository.deleteByLessonId(lesson.getId()); // Supprimer la progression
+            lessonRepository.delete(lesson);
+        }
+
+        // Supprimer le chapitre
+        chapterRepository.delete(chapter);
+        
+        log.info("✅ Chapitre supprimé: {}", chapterId);
+    }
+
+    //  Supprimer une leçon
+    public void deleteLesson(String lessonId, String instructorId) {
+        log.info("🗑️ Suppression de la leçon: {}", lessonId);
+
+        Lesson lesson = lessonRepository.findById(lessonId)
+                .orElseThrow(() -> new RuntimeException("Leçon non trouvée"));
+
+        // Vérifier l'autorisation
+        Chapter chapter = chapterRepository.findById(lesson.getChapterId())
+                .orElseThrow(() -> new RuntimeException("Chapitre non trouvé"));
+        
+        Course course = courseRepository.findById(chapter.getCourseId())
+                .orElseThrow(() -> new RuntimeException("Cours non trouvé"));
+
+        if (!course.getInstructorId().equals(instructorId)) {
+            throw new RuntimeException("Accès non autorisé à ce cours");
+        }
+
+        // Supprimer les médias de la leçon
+        deleteLessonMedia(lesson);
+        
+        // Supprimer la progression des utilisateurs
+        userProgressRepository.deleteByLessonId(lessonId);
+        
+        // Supprimer la leçon
+        lessonRepository.delete(lesson);
+        
+        log.info("✅ Leçon supprimée: {}", lessonId);
+    }
+
+    //  Modifier une leçon
+    public Lesson updateLesson(String lessonId, LessonCreateRequest request, String instructorId) {
+        log.info("✏️ Modification de la leçon: {}", lessonId);
+
+        Lesson lesson = lessonRepository.findById(lessonId)
+                .orElseThrow(() -> new RuntimeException("Leçon non trouvée"));
+
+        // Vérifier l'autorisation
+        Chapter chapter = chapterRepository.findById(lesson.getChapterId())
+                .orElseThrow(() -> new RuntimeException("Chapitre non trouvé"));
+        
+        Course course = courseRepository.findById(chapter.getCourseId())
+                .orElseThrow(() -> new RuntimeException("Cours non trouvé"));
+
+        if (!course.getInstructorId().equals(instructorId)) {
+            throw new RuntimeException("Accès non autorisé à ce cours");
+        }
+
+        // Mettre à jour les champs
+        lesson.setTitle(request.getTitle());
+        lesson.setContent(request.getContent());
+        
+        // Si le type de contenu change, nettoyer les anciens médias
+        if (!lesson.getContentType().equals(request.getContentType())) {
+            deleteLessonMedia(lesson);
+            lesson.setVideoUrl(null);
+            lesson.setDocumentUrl(null);
+        }
+        
+        lesson.setContentType(request.getContentType());
+        
+        // Pour les vidéos URL externe uniquement
+        if (request.getContentType() == ContentType.VIDEO && request.getVideoUrl() != null) {
+            lesson.setVideoUrl(request.getVideoUrl());
+        }
+
+        Lesson updatedLesson = lessonRepository.save(lesson);
+        log.info("✅ Leçon modifiée: {}", lessonId);
+
+        return updatedLesson;
+    }
+
+    // 🆕 MÉTHODE HELPER : Supprimer les médias d'une leçon
+    private void deleteLessonMedia(Lesson lesson) {
+        // Supprimer la vidéo si elle vient de Cloudinary
+        if (lesson.getVideoUrl() != null && lesson.getVideoUrl().contains("cloudinary.com")) {
+            String videoPublicId = cloudinaryService.extractPublicIdFromUrl(lesson.getVideoUrl());
+            if (videoPublicId != null) {
+                cloudinaryService.deleteVideo(videoPublicId);
+            }
+        }
+        
+        // Supprimer le document
+        if (lesson.getDocumentUrl() != null) {
+            String documentPublicId = cloudinaryService.extractPublicIdFromUrl(lesson.getDocumentUrl());
+            if (documentPublicId != null) {
+                cloudinaryService.deleteDocument(documentPublicId);
+            }
+        }
     }
 
     /**

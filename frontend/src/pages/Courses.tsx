@@ -1,120 +1,85 @@
-import { useState } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   Search,
   Filter,
   X,
   Star,
   Clock,
-  User,
   BookOpen,
-  Code,
-  Palette,
-  BarChart3,
-  Smartphone,
-  Camera,
-  Briefcase,
+  Loader2,
+  AlertCircle,
+  Users,
+  Award,
+  Calendar,
+  ArrowRight,
+  List,
+  LayoutGrid,
 } from "lucide-react";
+import { courseService } from "../services/courseService";
+import type { Course, Category } from "../types/course";
 
 export default function Courses() {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedLevel, setSelectedLevel] = useState("all");
   const [selectedDuration, setSelectedDuration] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
 
-  // Cours avec vraies images et design cohérent
-  const courses = [
-    {
-      id: 1,
-      title: "Développeur Web Full Stack",
-      description:
-        "Maîtrisez JavaScript, React, Node.js et créez des applications web modernes.",
-      category: "Développement Web",
-      level: "Intermédiaire",
-      duration: "6 mois",
-      students: 1234,
-      rating: 4.9,
-      image:
-        "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-    },
-    {
-      id: 2,
-      title: "UX/UI Designer",
-      description:
-        "Concevez des expériences utilisateur exceptionnelles avec Figma et les méthodes UX.",
-      category: "Design",
-      level: "Débutant",
-      duration: "4 mois",
-      students: 856,
-      rating: 4.8,
-      image:
-        "https://images.unsplash.com/photo-1611224923853-80b023f02d71?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-    },
-    {
-      id: 3,
-      title: "Data Scientist",
-      description:
-        "Analysez et visualisez les données avec Python, SQL et les outils de Machine Learning.",
-      category: "Data Science",
-      level: "Avancé",
-      duration: "8 mois",
-      students: 967,
-      rating: 4.7,
-      image:
-        "https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-    },
-    {
-      id: 4,
-      title: "Marketing Digital",
-      description:
-        "Maîtrisez les stratégies digitales, SEO, réseaux sociaux et analytics.",
-      category: "Marketing",
-      level: "Intermédiaire",
-      duration: "3 mois",
-      students: 743,
-      rating: 4.6,
-      image:
-        "https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-    },
-    {
-      id: 5,
-      title: "Développement Mobile React Native",
-      description:
-        "Créez des applications mobiles multiplateformes avec React Native.",
-      category: "Développement Mobile",
-      level: "Intermédiaire",
-      duration: "5 mois",
-      students: 532,
-      rating: 4.8,
-      image:
-        "https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-    },
-    {
-      id: 6,
-      title: "Gestion de Projet Agile",
-      description:
-        "Apprenez les méthodologies agiles et devenez un chef de projet efficace.",
-      category: "Management",
-      level: "Débutant",
-      duration: "2 mois",
-      students: 891,
-      rating: 4.5,
-      image:
-        "https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-    },
-  ];
+  // 🆕 NOUVEAU: État pour la vue (par défaut liste)
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
 
-  const categories = [
-    { name: "all", label: "Toutes les catégories", icon: BookOpen },
-    { name: "Développement Web", label: "Développement Web", icon: Code },
-    { name: "Design", label: "Design UX/UI", icon: Palette },
-    { name: "Data Science", label: "Data Science", icon: BarChart3 },
-    { name: "Développement Mobile", label: "Mobile", icon: Smartphone },
-    { name: "Marketing", label: "Marketing", icon: Camera },
-    { name: "Management", label: "Management", icon: Briefcase },
-  ];
+  useEffect(() => {
+    const fetchCoursesAndCategories = async () => {
+      try {
+        setLoading(true);
+        const courseResponse = await courseService.getPublishedCourses();
+        if (courseResponse.success && courseResponse.data) {
+          setCourses(courseResponse.data.content);
+        } else {
+          throw new Error(courseResponse.message || "Failed to fetch courses");
+        }
 
-  const levels = ["all", "Débutant", "Intermédiaire", "Avancé"];
+        const categoryResponse = await courseService.getCategories();
+        if (categoryResponse.success && categoryResponse.data) {
+          setCategories(categoryResponse.data);
+        } else {
+          throw new Error(
+            categoryResponse.message || "Failed to fetch categories"
+          );
+        }
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCoursesAndCategories();
+  }, []);
+
+  // Fonction pour obtenir l'URL de l'image ou fallback
+  const getImageUrl = (coverImage: string | undefined) => {
+    if (!coverImage) return null;
+
+    if (coverImage.startsWith("http")) {
+      return coverImage;
+    }
+
+    const API_BASE_URL =
+      import.meta.env.VITE_API_URL || "http://localhost:8080";
+    return `${API_BASE_URL}${
+      coverImage.startsWith("/") ? "" : "/"
+    }${coverImage}`;
+  };
+
+  const levels = ["all", "DEBUTANT", "INTERMEDIAIRE", "AVANCE"];
   const durations = ["all", "1-3 mois", "3-6 mois", "6+ mois"];
 
   const filteredCourses = courses.filter((course) => {
@@ -122,17 +87,19 @@ export default function Courses() {
       course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       course.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory =
-      selectedCategory === "all" || course.category === selectedCategory;
+      selectedCategory === "all" || course.categoryId === selectedCategory;
     const matchesLevel =
       selectedLevel === "all" || course.level === selectedLevel;
 
     let matchesDuration = true;
     if (selectedDuration !== "all") {
-      const duration = parseInt(course.duration);
-      if (selectedDuration === "1-3 mois") matchesDuration = duration <= 3;
+      const durationInMonths = parseInt(course.duration);
+      if (selectedDuration === "1-3 mois")
+        matchesDuration = durationInMonths >= 1 && durationInMonths <= 3;
       else if (selectedDuration === "3-6 mois")
-        matchesDuration = duration > 3 && duration <= 6;
-      else if (selectedDuration === "6+ mois") matchesDuration = duration > 6;
+        matchesDuration = durationInMonths > 3 && durationInMonths <= 6;
+      else if (selectedDuration === "6+ mois")
+        matchesDuration = durationInMonths > 6;
     }
 
     return matchesSearch && matchesCategory && matchesLevel && matchesDuration;
@@ -151,8 +118,287 @@ export default function Courses() {
     selectedLevel !== "all" ||
     selectedDuration !== "all";
 
+  // 🆕 NOUVEAU: Composant Card pour la vue grille
+  const CourseCardGrid = ({ course }: { course: Course }) => (
+    <div className="group bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-xl hover:border-primary/20 transition-all duration-300 hover:-translate-y-1">
+      {/* Image de couverture avec overlay */}
+      <div className="relative h-48 overflow-hidden bg-gradient-to-br from-primary/10 to-accent/10">
+        {course.coverImage ? (
+          <>
+            <img
+              src={getImageUrl(course.coverImage) || ""}
+              alt={course.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              onError={(e) => {
+                console.error("Erreur chargement image:", course.coverImage);
+                e.currentTarget.style.display = "none";
+                const fallback = e.currentTarget
+                  .nextElementSibling as HTMLElement;
+                if (fallback) fallback.style.display = "flex";
+              }}
+            />
+            <div
+              className="absolute inset-0 bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center"
+              style={{ display: "none" }}
+            >
+              <BookOpen className="w-16 h-16 text-primary/60" />
+            </div>
+          </>
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+            <BookOpen className="w-16 h-16 text-primary/60" />
+          </div>
+        )}
+
+        {/* Badge niveau */}
+        <div className="absolute top-4 left-4">
+          <span
+            className={`px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-sm ${
+              course.level === "DEBUTANT"
+                ? "bg-green-100/90 text-green-700"
+                : course.level === "INTERMEDIAIRE"
+                ? "bg-yellow-100/90 text-yellow-700"
+                : "bg-red-100/90 text-red-700"
+            }`}
+          >
+            {courseService.getLevelLabel(course.level)}
+          </span>
+        </div>
+
+        {/* Badge statut */}
+        <div className="absolute top-4 right-4">
+          <span
+            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-sm ${
+              course.status === "PUBLISHED"
+                ? "bg-success/90 text-white"
+                : "bg-yellow-100/90 text-yellow-700"
+            }`}
+          >
+            <div
+              className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                course.status === "PUBLISHED" ? "bg-white" : "bg-yellow-500"
+              }`}
+            ></div>
+            {courseService.getStatusLabel(course.status)}
+          </span>
+        </div>
+      </div>
+
+      {/* Contenu */}
+      <Link to={`/course/${course.id}`} className="block">
+        <div className="p-6">
+          {/* Catégorie */}
+          <div className="mb-3">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-primary/10 text-primary">
+              {course.categoryName ?? "Sans catégorie"}
+            </span>
+          </div>
+
+          {/* Titre */}
+          <h3 className="font-bold text-lg text-textPrimary mb-2 line-clamp-2 group-hover:text-primary transition-colors leading-tight">
+            {course.title}
+          </h3>
+
+          {/* Description */}
+          <p className="text-gray-600 text-sm mb-4 line-clamp-2 leading-relaxed">
+            {course.description}
+          </p>
+
+          {/* Statistiques */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-1.5 text-gray-600">
+                <Users className="w-4 h-4" />
+                <span className="text-sm font-medium">
+                  {course.students.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center space-x-1.5 text-gray-600">
+                <Clock className="w-4 h-4" />
+                <span className="text-sm font-medium">{course.duration}</span>
+              </div>
+            </div>
+            <div className="flex items-center space-x-1">
+              <Star className="w-4 h-4 text-yellow-500 fill-current" />
+              <span className="text-sm font-bold text-textPrimary">
+                {course.rating.toFixed(1)}
+              </span>
+            </div>
+          </div>
+
+          {/* Date et bouton discret */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-1 text-xs text-gray-500">
+              <Calendar className="w-3 h-3" />
+              <span>
+                Créé le{" "}
+                {course.createdAt
+                  ? new Date(course.createdAt).toLocaleDateString("fr-FR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                    })
+                  : "--"}
+              </span>
+            </div>
+            <div className="flex items-center space-x-1 text-primary opacity-60 group-hover:opacity-100 transition-opacity">
+              <span className="text-sm font-medium">Voir</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+        </div>
+      </Link>
+
+      {/* Badge popularité */}
+      {course.students > 100 && (
+        <div className="absolute top-2 left-1/2 transform -translate-x-1/2">
+          <div className="bg-accent text-white px-3 py-1 rounded-full text-xs font-bold flex items-center space-x-1 shadow-lg">
+            <Award className="w-3 h-3" />
+            <span>Populaire</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const CourseCardList = ({ course }: { course: Course }) => (
+    <div className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg hover:border-gray-300 transition-all duration-200">
+      <Link to={`/course/${course.id}`} className="block">
+        <div className="flex p-3  gap-6">
+          {/* Image simplifiée */}
+          <div className="relative w-48 h-34 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
+            {course.coverImage ? (
+              <>
+                <img
+                  src={getImageUrl(course.coverImage) || ""}
+                  alt={course.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  onError={(e) => {
+                    console.error(
+                      "Erreur chargement image:",
+                      course.coverImage
+                    );
+                    e.currentTarget.style.display = "none";
+                    const fallback = e.currentTarget
+                      .nextElementSibling as HTMLElement;
+                    if (fallback) fallback.style.display = "flex";
+                  }}
+                />
+                <div
+                  className="absolute inset-0 bg-gray-100 flex items-center justify-center"
+                  style={{ display: "none" }}
+                >
+                  <BookOpen className="w-8 h-8 text-gray-400" />
+                </div>
+              </>
+            ) : (
+              <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                <BookOpen className="w-8 h-8 text-gray-400" />
+              </div>
+            )}
+
+            {/* Badge niveau simple */}
+            <div className="absolute top-2 left-2">
+              <span
+                className={`px-2 py-1 rounded text-xs font-medium ${
+                  course.level === "DEBUTANT"
+                    ? "bg-green-100 text-green-700"
+                    : course.level === "INTERMEDIAIRE"
+                    ? "bg-orange-100 text-orange-700"
+                    : "bg-red-100 text-red-700"
+                }`}
+              >
+                {courseService.getLevelLabel(course.level)}
+              </span>
+            </div>
+          </div>
+
+          {/* Contenu principal */}
+          <div className="flex-1 flex flex-col justify-between min-h-[128px]">
+            {/* Section haute: Catégorie + Titre + Description */}
+            <div className="space-y-3">
+              {/* Catégorie */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-sm text-primary font-medium bg-primary/10 px-3 py-1 rounded-full">
+                  {course.categoryName || "Sans catégorie"}
+                </span>
+                {course.students > 100 && (
+                  <span className="text-xs text-orange-600 font-medium bg-orange-50 px-2 py-1 rounded-full flex items-center gap-1">
+                    <Award className="w-3 h-3" />
+                    Populaire
+                  </span>
+                )}
+              </div>
+
+              {/* Titre */}
+              <h3 className="font-semibold text-xl text-gray-900 group-hover:text-primary transition-colors line-clamp-2 leading-snug">
+                {course.title}
+              </h3>
+
+              {/* Description */}
+              <p className="text-gray-600 text-sm leading-relaxed line-clamp-2">
+                {course.description}
+              </p>
+            </div>
+
+            {/* Section basse: Métadonnées */}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+              {/* Statistiques à gauche */}
+              <div className="flex items-center gap-6 text-sm text-gray-500">
+                <div className="flex items-center gap-1.5">
+                  <Users className="w-4 h-4" />
+                  <span>{course.students.toLocaleString()} étudiants</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-4 h-4" />
+                  <span>{course.duration}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                  <span className="text-gray-900 font-medium">
+                    {course.rating.toFixed(1)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Statut à droite */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1 text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="text-sm font-medium">Voir le cours</span>
+                  <ArrowRight className="w-4 h-4" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Link>
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-12 h-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center p-8 bg-red-50 rounded-xl border border-red-200">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-red-800 mb-2">
+            Oops! Une erreur est survenue
+          </h2>
+          <p className="text-red-700">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-neutral">
       {/* Hero Section avec recherche */}
       <section className="bg-gradient-to-r from-neutral via-white to-neutral py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -179,20 +425,20 @@ export default function Courses() {
 
             {/* Tags catégories rapides */}
             <div className="flex flex-wrap justify-center gap-3">
-              {categories.slice(1, 6).map((category) => {
-                const IconComponent = category.icon;
+              {categories.slice(0, 5).map((category) => {
+                const IconComponent = BookOpen;
                 return (
                   <button
-                    key={category.name}
-                    onClick={() => setSelectedCategory(category.name)}
+                    key={category.id}
+                    onClick={() => setSelectedCategory(category.id)}
                     className={`flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                      selectedCategory === category.name
+                      selectedCategory === category.id
                         ? "bg-primary text-white"
                         : "bg-white text-gray-700 hover:bg-primary hover:text-white border border-gray-200"
                     }`}
                   >
                     <IconComponent className="w-4 h-4" />
-                    <span>{category.label}</span>
+                    <span>{category.name}</span>
                   </button>
                 );
               })}
@@ -203,7 +449,7 @@ export default function Courses() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar Filters - Design amélioré */}
+          {/* Sidebar Filters */}
           <div className="hidden lg:block w-72 flex-shrink-0">
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sticky top-24">
               <div className="flex items-center justify-between mb-6">
@@ -227,24 +473,41 @@ export default function Courses() {
                   Catégorie
                 </h3>
                 <div className="space-y-2">
+                  <label
+                    key="all-categories"
+                    className="flex items-center group cursor-pointer"
+                  >
+                    <input
+                      type="radio"
+                      name="category"
+                      value="all"
+                      checked={selectedCategory === "all"}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                      className="w-4 h-4 text-primary focus:ring-primary border-gray-300"
+                    />
+                    <div className="ml-3 flex items-center space-x-2 group-hover:text-primary transition-colors">
+                      <BookOpen className="w-4 h-4" />
+                      <span className="text-sm">Toutes les catégories</span>
+                    </div>
+                  </label>
                   {categories.map((category) => {
-                    const IconComponent = category.icon;
+                    const IconComponent = BookOpen;
                     return (
                       <label
-                        key={category.name}
+                        key={category.id}
                         className="flex items-center group cursor-pointer"
                       >
                         <input
                           type="radio"
                           name="category"
-                          value={category.name}
-                          checked={selectedCategory === category.name}
+                          value={category.id}
+                          checked={selectedCategory === category.id}
                           onChange={(e) => setSelectedCategory(e.target.value)}
                           className="w-4 h-4 text-primary focus:ring-primary border-gray-300"
                         />
                         <div className="ml-3 flex items-center space-x-2 group-hover:text-primary transition-colors">
                           <IconComponent className="w-4 h-4" />
-                          <span className="text-sm">{category.label}</span>
+                          <span className="text-sm">{category.name}</span>
                         </div>
                       </label>
                     );
@@ -272,34 +535,9 @@ export default function Courses() {
                         className="w-4 h-4 text-primary focus:ring-primary border-gray-300"
                       />
                       <span className="ml-3 text-sm group-hover:text-primary transition-colors">
-                        {level === "all" ? "Tous les niveaux" : level}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Filtre par durée */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 mb-4">
-                  Durée
-                </h3>
-                <div className="space-y-2">
-                  {durations.map((duration) => (
-                    <label
-                      key={duration}
-                      className="flex items-center group cursor-pointer"
-                    >
-                      <input
-                        type="radio"
-                        name="duration"
-                        value={duration}
-                        checked={selectedDuration === duration}
-                        onChange={(e) => setSelectedDuration(e.target.value)}
-                        className="w-4 h-4 text-primary focus:ring-primary border-gray-300"
-                      />
-                      <span className="ml-3 text-sm group-hover:text-primary transition-colors">
-                        {duration === "all" ? "Toutes durées" : duration}
+                        {level === "all"
+                          ? "Tous les niveaux"
+                          : courseService.getLevelLabel(level)}
                       </span>
                     </label>
                   ))}
@@ -324,15 +562,46 @@ export default function Courses() {
 
           {/* Contenu principal */}
           <div className="flex-1">
-            {/* Info résultats et filtres actifs */}
+            {/* Header avec résultats et TOGGLE GRILLE/LISTE */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
-              <p className="text-gray-600 font-medium">
-                <span className="text-textPrimary font-bold">
-                  {filteredCourses.length}
-                </span>{" "}
-                cours trouvé{filteredCourses.length > 1 ? "s" : ""}
-              </p>
+              <div className="flex items-center justify-between w-full ">
+                <p className="text-gray-400  text-sm  ">
+                  <span className="text-textPrimary font-bold">
+                    {filteredCourses.length}
+                  </span>{" "}
+                  cours trouvé{filteredCourses.length > 1 ? "s" : ""}
+                </p>
 
+                {/* 🆕 BOUTONS DE BASCULEMENT VUE */}
+                <div className="flex items-center bg-white rounded-lg border border-gray-200 p-1">
+                  <button
+                    onClick={() => setViewMode("list")}
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                      viewMode === "list"
+                        ? "bg-primary text-white shadow-sm"
+                        : "text-gray-600 hover:text-primary hover:bg-gray-50"
+                    }`}
+                    title="Vue liste"
+                  >
+                    <List className="w-4 h-4" />
+                    <span className="hidden sm:inline">Liste</span>
+                  </button>
+                  <button
+                    onClick={() => setViewMode("grid")}
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                      viewMode === "grid"
+                        ? "bg-primary text-white shadow-sm"
+                        : "text-gray-600 hover:text-primary hover:bg-gray-50"
+                    }`}
+                    title="Vue grille"
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                    <span className="hidden sm:inline">Grille</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Filtres actifs */}
               {hasActiveFilters && (
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm text-gray-500 font-medium">
@@ -351,7 +620,7 @@ export default function Courses() {
                   )}
                   {selectedCategory !== "all" && (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-accent/10 text-accent border border-accent/20">
-                      {selectedCategory}
+                      {categories.find((c) => c.id === selectedCategory)?.name}
                       <button
                         onClick={() => setSelectedCategory("all")}
                         className="ml-1 hover:text-accent/80"
@@ -362,7 +631,7 @@ export default function Courses() {
                   )}
                   {selectedLevel !== "all" && (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-success/10 text-success border border-success/20">
-                      {selectedLevel}
+                      {courseService.getLevelLabel(selectedLevel)}
                       <button
                         onClick={() => setSelectedLevel("all")}
                         className="ml-1 hover:text-success/80"
@@ -375,62 +644,27 @@ export default function Courses() {
               )}
             </div>
 
-            {/* Grille de cours - Même design que l'accueil */}
+            {/* 🆕 AFFICHAGE CONDITIONNEL SELON LE MODE VUE */}
             {filteredCourses.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                {filteredCourses.map((course) => (
-                  <a
-                    key={course.id}
-                    href={`/course/${course.id}`}
-                    className="group"
-                  >
-                    <div
-                      key={course.id}
-                      className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow overflow-hidden"
-                    >
-                      <img
-                        src={course.image}
-                        alt={course.title}
-                        className="w-full h-48 object-cover"
-                      />
-                      <div className="p-6">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-medium">
-                            {course.category}
-                          </span>
-                          <div className="flex items-center space-x-1">
-                            <Star className="w-4 h-4 text-accent fill-current" />
-                            <span className="text-sm text-gray-600 font-medium">
-                              {course.rating}
-                            </span>
-                          </div>
-                        </div>
+              <>
+                {/* Vue Grille */}
+                {viewMode === "grid" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {filteredCourses.map((course) => (
+                      <CourseCardGrid key={course.id} course={course} />
+                    ))}
+                  </div>
+                )}
 
-                        <h3 className="font-bold text-lg text-textPrimary mb-2 line-clamp-2">
-                          {course.title}
-                        </h3>
-
-                        <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                          {course.description}
-                        </p>
-
-                        <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                          <div className="flex items-center space-x-4">
-                            <div className="flex items-center space-x-1">
-                              <Clock className="w-4 h-4" />
-                              <span>{course.duration}</span>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              <User className="w-4 h-4" />
-                              <span>{course.students.toLocaleString()}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </a>
-                ))}
-              </div>
+                {/* Vue Liste */}
+                {viewMode === "list" && (
+                  <div className="space-y-4">
+                    {filteredCourses.map((course) => (
+                      <CourseCardList key={course.id} course={course} />
+                    ))}
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-16">
                 <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -482,21 +716,38 @@ export default function Courses() {
                   Catégorie
                 </h3>
                 <div className="space-y-3">
-                  {categories.map((category) => {
-                    const IconComponent = category.icon;
+                  <label
+                    key="all-categories-mobile"
+                    className="flex items-center"
+                  >
+                    <input
+                      type="radio"
+                      name="category-mobile"
+                      value="all"
+                      checked={selectedCategory === "all"}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                      className="w-4 h-4 text-primary focus:ring-primary border-gray-300"
+                    />
+                    <div className="ml-3 flex items-center space-x-2">
+                      <BookOpen className="w-4 h-4" />
+                      <span className="text-sm">Toutes les catégories</span>
+                    </div>
+                  </label>
+                  {categories.map((category: Category) => {
+                    const IconComponent = BookOpen;
                     return (
-                      <label key={category.name} className="flex items-center">
+                      <label key={category.id} className="flex items-center">
                         <input
                           type="radio"
                           name="category-mobile"
-                          value={category.name}
-                          checked={selectedCategory === category.name}
+                          value={category.id}
+                          checked={selectedCategory === category.id}
                           onChange={(e) => setSelectedCategory(e.target.value)}
                           className="w-4 h-4 text-primary focus:ring-primary border-gray-300"
                         />
                         <div className="ml-3 flex items-center space-x-2">
                           <IconComponent className="w-4 h-4" />
-                          <span className="text-sm">{category.label}</span>
+                          <span className="text-sm">{category.name}</span>
                         </div>
                       </label>
                     );
@@ -520,7 +771,9 @@ export default function Courses() {
                         className="w-4 h-4 text-primary focus:ring-primary border-gray-300"
                       />
                       <span className="ml-3 text-sm">
-                        {level === "all" ? "Tous les niveaux" : level}
+                        {level === "all"
+                          ? "Tous les niveaux"
+                          : courseService.getLevelLabel(level)}
                       </span>
                     </label>
                   ))}

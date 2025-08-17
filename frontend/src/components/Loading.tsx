@@ -2,14 +2,14 @@ interface LoadingProps {
   message?: string;
   size?: 'sm' | 'md' | 'lg';
   fullscreen?: boolean;
-  overlay?: boolean; // Nouvelle prop pour overlay
+  overlay?: boolean; 
 }
 
 export default function Loading({ 
   message = "Chargement...", 
   size = 'md', 
   fullscreen = false,
-  overlay = false // Nouvelle prop
+  overlay = false 
 }: LoadingProps) {
   const sizeClasses = {
     sm: 'w-4 h-4',

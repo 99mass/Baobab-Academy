@@ -11,6 +11,7 @@ public class LessonResponse {
     private String content;
     private ContentType contentType;
     private String videoUrl;
+    private String documentUrl;
     private String chapterId;
     private Integer orderIndex;
     private LocalDateTime createdAt;

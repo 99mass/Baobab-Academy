@@ -107,18 +107,20 @@ public class CloudinaryService {
     }
 
     /**
-     * Upload un document pour une leçon
+     * Upload un document pour une leçon - SOLUTION ROBUSTE
      */
     public CloudinaryUploadResult uploadLessonDocument(MultipartFile file, String courseId, String lessonId) throws IOException {
         validateDocumentFile(file);
         
-        String publicId = generateLessonDocumentPublicId(courseId, lessonId, file.getOriginalFilename());
+        String originalFilename = file.getOriginalFilename();
+        String publicId = generateLessonDocumentPublicId(courseId, lessonId, originalFilename);
         
         @SuppressWarnings("unchecked")
         Map<String, Object> uploadOptions = ObjectUtils.asMap(
                 "public_id", publicId,
                 "folder", "baobab-academy/lessons/documents",
                 "resource_type", "raw"
+                // 🆕 ON ENLÈVE use_filename et unique_filename pour avoir plus de contrôle
         );
 
         @SuppressWarnings("unchecked")
@@ -134,6 +136,43 @@ public class CloudinaryService {
                 .bytes((Integer) result.get("bytes"))
                 .success(true)
                 .build();
+    }
+
+    /**
+     * 🆕 MÉTHODE CORRIGÉE pour générer un publicId avec extension
+     */
+    private String generateLessonDocumentPublicId(String courseId, String lessonId, String originalFilename) {
+        // Extraire l'extension et le nom
+        String extension = "";
+        String baseName = "document";
+        
+        if (originalFilename != null && !originalFilename.isEmpty()) {
+            int lastDotIndex = originalFilename.lastIndexOf(".");
+            if (lastDotIndex > 0) {
+                extension = originalFilename.substring(lastDotIndex); // Garde le point
+                baseName = originalFilename.substring(0, lastDotIndex);
+            } else {
+                baseName = originalFilename;
+            }
+            
+            // Nettoyer le nom de base
+            baseName = baseName
+                .replaceAll("[^a-zA-Z0-9_-]", "_")
+                .replaceAll("_{2,}", "_");
+                
+            // Limiter la longueur
+            if (baseName.length() > 30) {
+                baseName = baseName.substring(0, 30);
+            }
+        }
+        
+        // 🎯 IMPORTANT : Le publicId DOIT inclure l'extension pour les fichiers raw
+        return String.format("%s_%s_%d%s", 
+            baseName, 
+            lessonId.substring(0, Math.min(8, lessonId.length())), // 8 premiers chars de l'ID
+            System.currentTimeMillis(),
+            extension // 🔑 Extension incluse ici
+        );
     }
 
     /**
@@ -309,10 +348,6 @@ public class CloudinaryService {
         return String.format("lessons/%s/%s/video_%d", courseId, lessonId, System.currentTimeMillis());
     }
 
-    private String generateLessonDocumentPublicId(String courseId, String lessonId, String originalFilename) {
-        String nameWithoutExtension = originalFilename.substring(0, originalFilename.lastIndexOf("."));
-        return String.format("lessons/%s/%s/doc_%s_%d", courseId, lessonId, nameWithoutExtension, System.currentTimeMillis());
-    }
 
     // Classe interne pour le résultat d'upload
     @lombok.Data

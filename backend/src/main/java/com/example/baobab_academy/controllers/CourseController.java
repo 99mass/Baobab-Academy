@@ -165,7 +165,30 @@ public class CourseController {
         }
     }
 
-    @Operation(summary = "Upload une vidéo pour une leçon")
+    @Operation(summary = "Mettre à jour un chapitre")
+    @PutMapping("/chapters/{chapterId}")
+    public ResponseEntity<ApiResponse<Chapter>> updateChapter(
+            @PathVariable String chapterId,
+            @Valid @RequestBody ChapterCreateRequest request,
+            Authentication authentication) {
+        
+        log.info("✏️ Mise à jour du chapitre: {}", chapterId);
+        
+        try {
+            String instructorId = getUserIdFromAuthentication(authentication);
+            Chapter chapter = courseService.updateChapter(chapterId, request, instructorId);
+            
+            return ResponseEntity.ok(ApiResponse.success("Chapitre mis à jour avec succès", chapter));
+            
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de la mise à jour du chapitre: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    // 🆕 NOUVEAU : Upload vidéo locale pour une leçon
+    @Operation(summary = "Upload une vidéo locale pour une leçon")
     @PostMapping("/lessons/{lessonId}/video")
     public ResponseEntity<ApiResponse<Lesson>> uploadLessonVideo(
             @PathVariable String lessonId,
@@ -182,6 +205,56 @@ public class CourseController {
             
         } catch (IOException e) {
             log.error("❌ Erreur lors de l'upload de la vidéo: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Erreur lors de l'upload: " + e.getMessage()));
+        } catch (Exception e) {
+            log.error("❌ Erreur: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    // 🆕 NOUVEAU : Définir URL vidéo externe pour une leçon
+    @Operation(summary = "Définir l'URL d'une vidéo externe pour une leçon")
+    @PutMapping("/lessons/{lessonId}/video-url")
+    public ResponseEntity<ApiResponse<Lesson>> setLessonVideoUrl(
+            @PathVariable String lessonId,
+            @RequestParam("videoUrl") String videoUrl,
+            Authentication authentication) {
+        
+        log.info("🔗 Définition URL vidéo pour la leçon: {} - URL: {}", lessonId, videoUrl);
+        
+        try {
+            String instructorId = getUserIdFromAuthentication(authentication);
+            Lesson lesson = courseService.setLessonVideoUrl(lessonId, videoUrl, instructorId);
+            
+            return ResponseEntity.ok(ApiResponse.success("URL vidéo définie avec succès", lesson));
+            
+        } catch (Exception e) {
+            log.error("❌ Erreur: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    // 🆕 NOUVEAU : Upload document pour une leçon
+    @Operation(summary = "Upload un document pour une leçon")
+    @PostMapping("/lessons/{lessonId}/document")
+    public ResponseEntity<ApiResponse<Lesson>> uploadLessonDocument(
+            @PathVariable String lessonId,
+            @RequestParam("file") MultipartFile file,
+            Authentication authentication) {
+        
+        log.info("📄 Upload document pour la leçon: {}", lessonId);
+        
+        try {
+            String instructorId = getUserIdFromAuthentication(authentication);
+            Lesson lesson = courseService.uploadLessonDocument(lessonId, file, instructorId);
+            
+            return ResponseEntity.ok(ApiResponse.success("Document uploadé avec succès", lesson));
+            
+        } catch (IOException e) {
+            log.error("❌ Erreur lors de l'upload du document: {}", e.getMessage());
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Erreur lors de l'upload: " + e.getMessage()));
         } catch (Exception e) {
@@ -274,6 +347,73 @@ public class CourseController {
             
         } catch (Exception e) {
             log.error("❌ Erreur lors de la suppression: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    // 🆕 NOUVEAU : Supprimer un chapitre
+    @Operation(summary = "Supprimer un chapitre")
+    @DeleteMapping("/chapters/{chapterId}")
+    public ResponseEntity<ApiResponse<Void>> deleteChapter(
+            @PathVariable String chapterId,
+            Authentication authentication) {
+        
+        log.info("🗑️ Suppression du chapitre: {}", chapterId);
+        
+        try {
+            String instructorId = getUserIdFromAuthentication(authentication);
+            courseService.deleteChapter(chapterId, instructorId);
+            
+            return ResponseEntity.ok(ApiResponse.success("Chapitre supprimé avec succès", null));
+            
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de la suppression du chapitre: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    // 🆕 NOUVEAU : Supprimer une leçon
+    @Operation(summary = "Supprimer une leçon")
+    @DeleteMapping("/lessons/{lessonId}")
+    public ResponseEntity<ApiResponse<Void>> deleteLesson(
+            @PathVariable String lessonId,
+            Authentication authentication) {
+        
+        log.info("🗑️ Suppression de la leçon: {}", lessonId);
+        
+        try {
+            String instructorId = getUserIdFromAuthentication(authentication);
+            courseService.deleteLesson(lessonId, instructorId);
+            
+            return ResponseEntity.ok(ApiResponse.success("Leçon supprimée avec succès", null));
+            
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de la suppression de la leçon: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    // 🆕 NOUVEAU : Modifier une leçon
+    @Operation(summary = "Modifier une leçon")
+    @PutMapping("/lessons/{lessonId}")
+    public ResponseEntity<ApiResponse<Lesson>> updateLesson(
+            @PathVariable String lessonId,
+            @Valid @RequestBody LessonCreateRequest request,
+            Authentication authentication) {
+        
+        log.info("✏️ Modification de la leçon: {}", lessonId);
+        
+        try {
+            String instructorId = getUserIdFromAuthentication(authentication);
+            Lesson lesson = courseService.updateLesson(lessonId, request, instructorId);
+            
+            return ResponseEntity.ok(ApiResponse.success("Leçon modifiée avec succès", lesson));
+            
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de la modification de la leçon: {}", e.getMessage());
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error(e.getMessage()));
         }

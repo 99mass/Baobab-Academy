@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   BrowserRouter as Router,
   Routes,
@@ -95,7 +96,7 @@ function AppContent() {
               <Header
                 isAuthenticated={isAuthenticated}
                 userRole={user?.role === "ADMIN" ? "admin" : "student"}
-                user={user ?? undefined}
+                user={user as any}
               />
 
               <main className="flex-1">

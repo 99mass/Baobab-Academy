@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Clock, Award, TrendingUp, Edit, Save, X, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { authService } from '../services/authService';
+import { userProfileService, type EnrolledCourse, type UserStats } from '../services/userProfileService';
 import CourseCard from '../components/CourseCard';
-import { mockCourses } from '../data/mockData';
 
 interface UpdateProfileData {
   firstName: string;
@@ -18,6 +19,13 @@ export default function Profile() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState('');
   const [updateSuccess, setUpdateSuccess] = useState(false);
+  
+  const [enrolledCourses, setEnrolledCourses] = useState<EnrolledCourse[]>([]);
+  const [inProgressCourses, setInProgressCourses] = useState<EnrolledCourse[]>([]);
+  const [completedCourses, setCompletedCourses] = useState<EnrolledCourse[]>([]);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [loadingCourses, setLoadingCourses] = useState(true);
+  const [coursesError, setCoursesError] = useState<string | null>(null);
   
   const [userInfo, setUserInfo] = useState<UpdateProfileData>({
     firstName: '',
@@ -36,19 +44,73 @@ export default function Profile() {
     }
   }, [user]);
 
-  // Données mockées pour les cours (en attendant l'intégration backend)
-  const enrolledCourses = mockCourses.filter(course => 
-    // Ici vous pourrez utiliser les vraies données de l'utilisateur
-    [1, 2, 3].includes(course.id)
-  );
+  // 🆕 Charger les données des cours au montage
+  useEffect(() => {
+    if (user) {
+      loadUserCourseData();
+    }
+  }, [user]);
 
-  const completedCourses = mockCourses.filter(course => 
-    [1].includes(course.id)
-  );
-
-  const inProgressCourses = enrolledCourses.filter(course => 
-    course.progress && course.progress > 0 && course.progress < 100
-  );
+  // 🆕 Fonction pour charger toutes les données utilisateur
+  const loadUserCourseData = async () => {
+    try {
+      setLoadingCourses(true);
+      setCoursesError(null);
+      
+      console.log('🔄 Chargement des données utilisateur...');
+      
+      // Charger les cours inscrits
+      const enrolledResponse = await userProfileService.getEnrolledCourses();
+      
+      if (enrolledResponse.success && enrolledResponse.data) {
+        const allEnrolledCourses = enrolledResponse.data;
+        setEnrolledCourses(allEnrolledCourses);
+        
+        // Filtrer les cours en cours et terminés
+        const inProgress = allEnrolledCourses.filter(course => 
+          course.progressPercentage > 0 && course.progressPercentage < 100
+        );
+        const completed = allEnrolledCourses.filter(course => 
+          course.isCompleted || course.progressPercentage >= 100
+        );
+        
+        setInProgressCourses(inProgress);
+        setCompletedCourses(completed);
+        
+        // Calculer les statistiques
+        const stats = userProfileService.calculateStats(allEnrolledCourses);
+        setUserStats(stats);
+        
+        console.log('✅ Données chargées:', {
+          total: allEnrolledCourses.length,
+          inProgress: inProgress.length,
+          completed: completed.length,
+          stats
+        });
+      } else {
+        throw new Error(enrolledResponse.message || 'Erreur lors du chargement des cours');
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Erreur lors du chargement des données:', error);
+      setCoursesError(error.message || 'Erreur lors du chargement de vos cours');
+      
+      // En cas d'erreur, initialiser avec des valeurs par défaut
+      setEnrolledCourses([]);
+      setInProgressCourses([]);
+      setCompletedCourses([]);
+      setUserStats({
+        totalEnrolledCourses: 0,
+        completedCourses: 0,
+        inProgressCourses: 0,
+        totalWatchTimeHours: 0,
+        completionRate: 0,
+        certificatesEarned: 0
+      });
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -124,9 +186,9 @@ export default function Profile() {
     setUpdateError('');
   };
 
+  // 🆕 Utiliser les vraies statistiques
   const getCompletionRate = () => {
-    if (enrolledCourses.length === 0) return 0;
-    return Math.round((completedCourses.length / enrolledCourses.length) * 100);
+    return userStats?.completionRate || 0;
   };
 
   const formatMemberSince = (dateString: string) => {
@@ -135,6 +197,18 @@ export default function Profile() {
       year: 'numeric', 
       month: 'long' 
     });
+  };
+
+  // Conversion des cours pour CourseCard (adapter le format si nécessaire)
+  const convertToCourseCardFormat = (enrolledCourse: EnrolledCourse) => {
+    return {
+      ...enrolledCourse,
+      progress: enrolledCourse.progressPercentage,
+      image: enrolledCourse.coverImage, // Mapper coverImage à image
+      category: enrolledCourse.categoryName || '',
+      lessonsCount: enrolledCourse.totalLessons || 0,
+      isEnrolled: true,
+    };
   };
 
   if (!user) {
@@ -167,6 +241,22 @@ export default function Profile() {
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center space-x-2">
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
             <p className="text-sm text-red-700">{updateError}</p>
+          </div>
+        )}
+
+        {/* Erreur de chargement des cours */}
+        {coursesError && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center space-x-2">
+            <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm text-yellow-700">{coursesError}</p>
+              <button 
+                onClick={loadUserCourseData}
+                className="text-sm text-yellow-800 underline hover:no-underline"
+              >
+                Réessayer
+              </button>
+            </div>
           </div>
         )}
 
@@ -239,17 +329,19 @@ export default function Profile() {
                       {user.firstName} {user.lastName}
                     </h1>
                     <p className="text-gray-600 mb-1 text-sm">{user.email}</p>
-                    <p className="text-sm text-gray-500 mb-4">
-                      Membre depuis {formatMemberSince(user.createdAt)}
-                    </p>
+                    {user.createdAt && (
+                      <p className="text-sm text-gray-500 mb-4">
+                        Membre depuis {formatMemberSince(user.createdAt)}
+                      </p>
+                    )}
                     <div className="flex items-center space-x-6 text-sm text-gray-500">
                       <span className="flex items-center space-x-2">
                         <BookOpen className="w-4 h-4" />
-                        <span>{enrolledCourses.length} cours inscrits</span>
+                        <span>{userStats?.totalEnrolledCourses || 0} cours inscrits</span>
                       </span>
                       <span className="flex items-center space-x-2">
                         <Award className="w-4 h-4" />
-                        <span>{completedCourses.length} terminés</span>
+                        <span>{userStats?.completedCourses || 0} terminés</span>
                       </span>
                       <span className="flex items-center space-x-2">
                         <TrendingUp className="w-4 h-4" />
@@ -324,7 +416,13 @@ export default function Profile() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Cours inscrits</p>
-                <p className="text-3xl font-bold text-textPrimary">{enrolledCourses.length}</p>
+                <p className="text-3xl font-bold text-textPrimary">
+                  {loadingCourses ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : (
+                    userStats?.totalEnrolledCourses || 0
+                  )}
+                </p>
               </div>
               <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
                 <BookOpen className="w-6 h-6 text-primary" />
@@ -336,7 +434,13 @@ export default function Profile() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Cours terminés</p>
-                <p className="text-3xl font-bold text-textPrimary">{completedCourses.length}</p>
+                <p className="text-3xl font-bold text-textPrimary">
+                  {loadingCourses ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : (
+                    userStats?.completedCourses || 0
+                  )}
+                </p>
               </div>
               <div className="w-12 h-12 bg-success/10 rounded-lg flex items-center justify-center">
                 <Award className="w-6 h-6 text-success" />
@@ -348,7 +452,13 @@ export default function Profile() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Temps d'étude</p>
-                <p className="text-3xl font-bold text-textPrimary">42h</p>
+                <p className="text-3xl font-bold text-textPrimary">
+                  {loadingCourses ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : (
+                    `${userStats?.totalWatchTimeHours || 0}h`
+                  )}
+                </p>
               </div>
               <div className="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center">
                 <Clock className="w-6 h-6 text-accent" />
@@ -360,7 +470,13 @@ export default function Profile() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Taux de réussite</p>
-                <p className="text-3xl font-bold text-textPrimary">{getCompletionRate()}%</p>
+                <p className="text-3xl font-bold text-textPrimary">
+                  {loadingCourses ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : (
+                    `${getCompletionRate()}%`
+                  )}
+                </p>
               </div>
               <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-yellow-600" />
@@ -389,7 +505,7 @@ export default function Profile() {
                 : 'text-gray-600 hover:text-textPrimary hover:bg-gray-50'
             }`}
           >
-            En cours ({inProgressCourses.length})
+            En cours ({loadingCourses ? '...' : inProgressCourses.length})
           </button>
           <button
             onClick={() => setActiveTab('completed')}
@@ -399,91 +515,145 @@ export default function Profile() {
                 : 'text-gray-600 hover:text-textPrimary hover:bg-gray-50'
             }`}
           >
-            Terminés ({completedCourses.length})
+            Terminés ({loadingCourses ? '...' : completedCourses.length})
           </button>
         </div>
 
+        {/* Loading State */}
+        {loadingCourses && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+            <p className="text-gray-600">Chargement de vos cours...</p>
+          </div>
+        )}
+
         {/* Tab Content */}
-        {activeTab === 'overview' && (
-          <div className="space-y-8">
-            {/* Continue Learning */}
-            {inProgressCourses.length > 0 && (
-              <div>
-                <h2 className="text-2xl font-bold text-textPrimary mb-6">Continuer l'apprentissage</h2>
-                <div className="space-y-4">
-                  {inProgressCourses.map((course) => (
-                    <CourseCard key={course.id} course={course} variant="compact" />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Recent Achievements */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-              <h2 className="text-xl font-semibold text-textPrimary mb-6">Accomplissements récents</h2>
-              {completedCourses.length > 0 ? (
-                <div className="space-y-4">
-                  {completedCourses.slice(0, 3).map((course) => (
-                    <div key={course.id} className="flex items-center space-x-4 p-4 bg-success/5 rounded-lg">
-                      <div className="w-12 h-12 bg-success rounded-full flex items-center justify-center">
-                        <Award className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-textPrimary">Cours terminé</h3>
-                        <p className="text-sm text-gray-600">{course.title}</p>
-                      </div>
-                      <div className="text-right text-sm text-gray-500">
-                        Il y a 2 jours
-                      </div>
+        {!loadingCourses && (
+          <>
+            {activeTab === 'overview' && (
+              <div className="space-y-8">
+                {/* Continue Learning */}
+                {inProgressCourses.length > 0 && (
+                  <div>
+                    <h2 className="text-2xl font-bold text-textPrimary mb-6">Continuer l'apprentissage</h2>
+                    <div className="space-y-4">
+                      {inProgressCourses.slice(0, 3).map((course) => (
+                        <CourseCard 
+                          key={course.id} 
+                          course={convertToCourseCardFormat(course) as any} 
+                          variant="compact" 
+                        />
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <Award className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">Aucun cours terminé pour le moment</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+                  </div>
+                )}
 
-        {activeTab === 'inProgress' && (
-          <div>
-            <h2 className="text-2xl font-bold text-textPrimary mb-6">Cours en cours</h2>
-            {inProgressCourses.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {inProgressCourses.map((course) => (
-                  <CourseCard key={course.id} course={course} />
-                ))}
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-                <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-textPrimary mb-2">Aucun cours en cours</h3>
-                <p className="text-gray-600">Explorez nos cours pour commencer votre apprentissage</p>
+                {/* Recent Achievements */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                  <h2 className="text-xl font-semibold text-textPrimary mb-6">Accomplissements récents</h2>
+                  {completedCourses.length > 0 ? (
+                    <div className="space-y-4">
+                      {completedCourses.slice(0, 3).map((course) => (
+                        <div key={course.id} className="flex items-center space-x-4 p-4 bg-success/5 rounded-lg">
+                          <div className="w-12 h-12 bg-success rounded-full flex items-center justify-center">
+                            <Award className="w-6 h-6 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-medium text-textPrimary">Cours terminé</h3>
+                            <p className="text-sm text-gray-600">{course.title}</p>
+                            <p className="text-xs text-gray-500">
+                              {course.enrolledAt ? new Date(course.enrolledAt).toLocaleDateString('fr-FR') : 'Récemment'}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl">🏆</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Award className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-500">Aucun cours terminé pour le moment</p>
+                      <p className="text-sm text-gray-400 mt-2">
+                        Terminez votre premier cours pour voir vos accomplissements ici
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-          </div>
-        )}
 
-        {activeTab === 'completed' && (
-          <div>
-            <h2 className="text-2xl font-bold text-textPrimary mb-6">Cours terminés</h2>
-            {completedCourses.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {completedCourses.map((course) => (
-                  <CourseCard key={course.id} course={course} />
-                ))}
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-                <Award className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-textPrimary mb-2">Aucun cours terminé</h3>
-                <p className="text-gray-600">Terminez vos premiers cours pour voir vos accomplissements ici</p>
+            {activeTab === 'inProgress' && (
+              <div>
+                <h2 className="text-2xl font-bold text-textPrimary mb-6">Cours en cours</h2>
+                {inProgressCourses.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {inProgressCourses.map((course) => (
+                      <CourseCard 
+                        key={course.id} 
+                        course={convertToCourseCardFormat(course) as any} 
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                    <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-textPrimary mb-2">Aucun cours en cours</h3>
+                    <p className="text-gray-600 mb-4">Explorez nos cours pour commencer votre apprentissage</p>
+                    <a 
+                      href="/courses" 
+                      className="inline-flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                    >
+                      Découvrir les cours
+                    </a>
+                  </div>
+                )}
               </div>
             )}
-          </div>
+
+            {activeTab === 'completed' && (
+              <div>
+                <h2 className="text-2xl font-bold text-textPrimary mb-6">Cours terminés</h2>
+                {completedCourses.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {completedCourses.map((course) => (
+                      <div key={course.id} className="relative">
+                        <CourseCard course={convertToCourseCardFormat(course) as any} />
+                        {/* Badge de completion */}
+                        <div className="absolute top-2 right-2 bg-success text-white px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1">
+                          <Award className="w-3 h-3" />
+                          <span>Terminé</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                    <Award className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-textPrimary mb-2">Aucun cours terminé</h3>
+                    <p className="text-gray-600 mb-4">Terminez vos premiers cours pour voir vos accomplissements ici</p>
+                    {enrolledCourses.length > 0 ? (
+                      <a 
+                        href="/profile" 
+                        onClick={() => setActiveTab('inProgress')}
+                        className="inline-flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                      >
+                        Continuer mes cours
+                      </a>
+                    ) : (
+                      <a 
+                        href="/courses" 
+                        className="inline-flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                      >
+                        Découvrir les cours
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

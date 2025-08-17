@@ -18,7 +18,8 @@ public class LessonCreateRequest {
     @NotNull(message = "Le type de contenu est obligatoire")
     private ContentType contentType;
 
-    private String videoUrl;
+    // 🆕 POUR LES VIDÉOS : Soit URL externe, soit upload local (géré séparément)
+    private String videoUrl; // YouTube, Vimeo, etc.
 
     @Min(value = 0, message = "L'ordre ne peut pas être négatif")
     private Integer orderIndex = 0; // 0 = ajouter à la fin

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
@@ -13,14 +14,11 @@ import {
   Video,
   Download,
   Clock,
+  FolderOpen,
 } from "lucide-react";
 import { courseService } from "../services/courseService";
 import { useAuth } from "../hooks/useAuth";
-import type {
-  Chapter,
-  Lesson,
-  CourseWithProgress,
-} from "../types/course";
+import type { Chapter, Lesson, CourseWithProgress } from "../types/course";
 
 export default function CoursePlayer() {
   const { id, lessonId } = useParams<{ id: string; lessonId?: string }>();
@@ -392,7 +390,6 @@ export default function CoursePlayer() {
                 <div>
                   {chapter.lessons?.map((lesson) => {
                     const lessonStatus = getLessonStatus(lesson.id);
-                    const lessonProgress = getLessonProgress(lesson.id);
                     const isCurrentLesson = currentLessonId === lesson.id;
 
                     return (
@@ -466,22 +463,8 @@ export default function CoursePlayer() {
                                   : "Document"}
                                 {lessonStatus === "completed" && " • Terminée"}
                               </p>
-                              {lessonStatus === "in-progress" && (
-                                <span className="text-xs text-blue-600 font-medium">
-                                  {lessonProgress}%
-                                </span>
-                              )}
                             </div>
 
-                            {/* Barre de progression pour les leçons en cours */}
-                            {lessonStatus === "in-progress" && (
-                              <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
-                                <div
-                                  className="bg-blue-500 h-1 rounded-full transition-all duration-300"
-                                  style={{ width: `${lessonProgress}%` }}
-                                />
-                              </div>
-                            )}
                           </div>
                         </div>
                       </button>
@@ -508,10 +491,10 @@ export default function CoursePlayer() {
               </button>
             )}
             <div>
-              <h1 className="font-semibold text-textPrimary">
+              <h1 className="font-semibold text-textPrimary flex">
+                <FolderOpen className="w-6 h-6 text-primary mr-2" />
                 {currentLesson.title}
               </h1>
-              <p className="text-sm text-gray-600">{currentChapter.title}</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
@@ -523,7 +506,7 @@ export default function CoursePlayer() {
             )}
           </div>
         </div>
-
+        
         {/* Content Area */}
         <div className="flex-1 bg-gray-50">
           {currentLesson.contentType === "VIDEO" && currentLesson.videoUrl ? (
@@ -550,16 +533,13 @@ export default function CoursePlayer() {
                       controls
                       preload="metadata"
                       onLoadedData={() => {
-                        // Optionnel : marquer le début de visionnage
                         console.log("Vidéo chargée");
                       }}
                       onTimeUpdate={(e) => {
-                        // Optionnel : suivre la progression de visionnage
                         const video = e.target as HTMLVideoElement;
                         const progress =
                           (video.currentTime / video.duration) * 100;
                         if (progress > 0 && progress % 10 === 0) {
-                          // Sauvegarder tous les 10%
                           courseService.updateLessonProgress(
                             currentLessonId!,
                             Math.floor(progress),
@@ -574,8 +554,70 @@ export default function CoursePlayer() {
                 </div>
               </div>
             </div>
+          ) : currentLesson.contentType === "DOCUMENT" &&
+            currentLesson.documentUrl ? (
+            // 🆕 Zone document avec visualiseur intégré
+            <div className="p-8">
+              <div className="max-w-6xl mx-auto">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+
+                  {/* Visualiseur de document */}
+                  <div className="h-[600px] bg-gray-100">
+                    {currentLesson.documentUrl
+                      .toLowerCase()
+                      .endsWith(".pdf") ? (
+                      // Visualiseur PDF intégré
+                      <iframe
+                        src={`${currentLesson.documentUrl}#toolbar=1&navpanes=1&scrollbar=1`}
+                        title={currentLesson.title}
+                        className="w-full h-full border-0"
+                        onLoad={() => {
+                          // Marquer comme commencé quand le document se charge
+                          courseService.updateLessonProgress(
+                            currentLessonId!,
+                            25,
+                            0
+                          );
+                        }}
+                      />
+                    ) : (
+                      // Autres types de documents
+                      <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                        <Download className="w-16 h-16 text-gray-400 mb-4" />
+                        <h3 className="text-lg font-medium text-textPrimary mb-2">
+                          Document disponible
+                        </h3>
+                        <p className="text-gray-600 mb-6 max-w-md">
+                          Ce document n'est pas prévisualisable directement.
+                          Cliquez sur le bouton de téléchargement ci-dessus pour
+                          l'ouvrir.
+                        </p>
+                        <a
+                          href={currentLesson.documentUrl}
+                          download
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center space-x-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                          onClick={() => {
+                            // Marquer comme consulté lors du téléchargement
+                            courseService.updateLessonProgress(
+                              currentLessonId!,
+                              50,
+                              0
+                            );
+                          }}
+                        >
+                          <Download className="w-5 h-5" />
+                          <span>Ouvrir le document</span>
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : (
-            // Zone de contenu texte
+            // Zone de contenu texte (défaut)
             <div className="p-8">
               <div className="max-w-4xl mx-auto">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
@@ -627,7 +669,6 @@ export default function CoursePlayer() {
             </div>
           )}
         </div>
-
         {/* Navigation */}
         <div className="bg-white border-t border-gray-200 p-6">
           <div className="max-w-4xl mx-auto flex items-center justify-between">

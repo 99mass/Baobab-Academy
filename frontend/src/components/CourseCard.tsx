@@ -7,7 +7,7 @@ interface CourseCardProps {
   variant?: 'default' | 'compact';
 }
 
-export default function CourseCard({ course, variant = 'default' }: CourseCardProps) {
+export default function CourseCard({ course  , variant = 'default' }: CourseCardProps) {
   const getLevelColor = (level: string) => {
     switch (level) {
       case 'Débutant':

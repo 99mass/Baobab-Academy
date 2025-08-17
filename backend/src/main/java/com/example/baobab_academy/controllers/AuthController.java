@@ -65,8 +65,6 @@ public class AuthController {
         String email = authentication != null ? authentication.getName() : "unknown";
         log.info("Déconnexion de l'utilisateur: {}", email);
 
-        // Note: Avec JWT, la déconnexion côté serveur est limitée
-        // Le client doit simplement supprimer le token
         return ResponseEntity.ok(ApiResponse.success("Déconnexion réussie"));
     }
 

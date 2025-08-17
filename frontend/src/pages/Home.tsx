@@ -1,17 +1,74 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
   BookOpen,
   Users,
   Award,
-  Search,
   Star,
   Clock,
   User,
+  Loader2,
 } from "lucide-react";
+import { courseService } from "../services/courseService";
+import { authService } from "../services/authService";
+import type { Course } from "../types/course";
 import "../css/animation.css";
 
 export default function Home() {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Vérifier l'authentification
+        const user = authService.getCurrentUser();
+        setIsAuthenticated(!!user);
+
+        // Récupérer les cours publiés
+        const courseResponse = await courseService.getPublishedCourses();
+        if (courseResponse.success && courseResponse.data) {
+          // Prendre les 3 cours les plus populaires (plus d'étudiants)
+          const popularCourses = courseResponse.data.content
+            .sort((a, b) => b.students - a.students)
+            .slice(0, 3);
+          setCourses(popularCourses);
+        }
+
+        // Récupérer les catégories
+        const categoryResponse = await courseService.getCategories();
+        if (categoryResponse.success && categoryResponse.data) {
+          // Utiliser toutes les catégories disponibles
+          setCategories(categoryResponse.data);
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des données:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Fonction pour obtenir l'URL de l'image
+  const getImageUrl = (coverImage: string | undefined) => {
+    if (!coverImage) return null;
+    
+    if (coverImage.startsWith('http')) {
+      return coverImage;
+    }
+    
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+    return `${API_BASE_URL}${coverImage.startsWith('/') ? '' : '/'}${coverImage}`;
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* Hero Section avec Image */}
@@ -46,12 +103,16 @@ export default function Home() {
                   <span>Explorer nos cours</span>
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
-                <Link
-                  to="/auth"
-                  className="border-2 border-primary text-primary px-8 py-4 rounded-lg font-semibold hover:bg-primary hover:text-white transition-all duration-300 hover:scale-105 text-center"
-                >
-                  Créer un compte gratuit
-                </Link>
+                
+                {/* Bouton Créer un compte - masqué si connecté */}
+                {!isAuthenticated && (
+                  <Link
+                    to="/auth"
+                    className="border-2 border-primary text-primary px-8 py-4 rounded-lg font-semibold hover:bg-primary hover:text-white transition-all duration-300 hover:scale-105 text-center"
+                  >
+                    Créer un compte gratuit
+                  </Link>
+                )}
               </div>
 
               {/* Petites stats */}
@@ -79,12 +140,6 @@ export default function Home() {
                   alt="Étudiants apprenant ensemble"
                   className="rounded-2xl shadow-2xl hover:scale-105 transition-transform duration-500"
                 />
-                {/* Badge de lecture vidéo */}
-                {/* <div className="absolute inset-0 flex items-center justify-center">
-                  <button className="bg-white/90 hover:bg-white p-6 rounded-full shadow-lg transition-all duration-300 hover:scale-110 animate-pulse-slow">
-                    <Play className="w-8 h-8 text-primary fill-current" />
-                  </button>
-                </div> */}
                 {/* Petites cartes flottantes */}
                 <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-xl shadow-lg animate-float">
                   <div className="flex items-center space-x-3">
@@ -111,37 +166,53 @@ export default function Home() {
           <h2 className="text-2xl font-bold text-textPrimary mb-8">
             Que souhaitez-vous apprendre aujourd'hui ?
           </h2>
-          <div className="relative max-w-2xl mx-auto">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Rechercher un cours, une compétence..."
-              className="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-xl text-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300 hover:shadow-md focus:scale-105"
-            />
-          </div>
 
-          {/* Tags populaires */}
+          {/* Tags populaires avec toutes les catégories de l'API */}
           <div className="flex flex-wrap justify-center gap-3 mt-6">
-            {[
-              "JavaScript",
-              "Python",
-              "Design UX/UI",
-              "Marketing Digital",
-              "Data Science",
-            ].map((tag, index) => (
-              <span
-                key={tag}
-                className="px-4 py-2 bg-white text-gray-700 rounded-full text-sm font-medium hover:bg-primary hover:text-white transition-all duration-300 cursor-pointer hover:scale-105 hover:shadow-lg animate-fade-in opacity-0"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                {tag}
-              </span>
-            ))}
+            {loading ? (
+              // Tags de chargement (nombre variable selon l'API)
+              [1, 2, 3, 4, 5, 6].map((_, index) => (
+                <div
+                  key={index}
+                  className="px-4 py-2 bg-gray-200 animate-pulse rounded-full text-sm font-medium h-8 w-24"
+                />
+              ))
+            ) : categories.length > 0 ? (
+              // Toutes les catégories de l'API
+              categories.map((category, index) => (
+                <Link
+                  key={category.id}
+                  to={`/courses?category=${category.id}`}
+                  className="px-4 py-2 bg-white text-gray-700 rounded-full text-sm font-medium hover:bg-primary hover:text-white transition-all duration-300 cursor-pointer hover:scale-105 hover:shadow-lg animate-fade-in opacity-0"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  {category.name}
+                </Link>
+              ))
+            ) : (
+              // Fallback uniquement si l'API échoue
+              [
+                "JavaScript",
+                "Python", 
+                "Design UX/UI",
+                "Marketing Digital",
+                "Data Science",
+              ].map((tag, index) => (
+                <Link
+                  key={tag}
+                  to={`/courses?search=${encodeURIComponent(tag)}`}
+                  className="px-4 py-2 bg-white text-gray-700 rounded-full text-sm font-medium hover:bg-primary hover:text-white transition-all duration-300 cursor-pointer hover:scale-105 hover:shadow-lg animate-fade-in opacity-0"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  {tag}
+                </Link>
+              ))
+            )}
           </div>
         </div>
       </section>
 
-      {/* Cours populaires avec vraies images */}
+      {/* Cours populaires avec vraies données */}
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12 animate-fade-in-up">
@@ -154,141 +225,62 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-            {/* Cours 1 */}
-            <a
-              className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group animate-slide-in-up opacity-0 animation-delay-200 hover:scale-105"
-              href="/course/1"
-            >
-              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group">
-                <div className="overflow-hidden">
-                  <img
-                    src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80"
-                    alt="Développement Web"
-                    className="w-full h-48 object-cover group-hover:scale-110 transition-transform duration-500"
-                  />
-                </div>
-                <div className="p-6">
-                  <div className="flex items-center space-x-2 mb-3">
-                    <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-medium group-hover:bg-primary group-hover:text-white transition-colors">
-                      Développement
-                    </span>
-                    <div className="flex items-center space-x-1">
-                      <Star className="w-4 h-4 text-accent fill-current group-hover:scale-110 transition-transform" />
-                      <span className="text-sm text-gray-600">4.9</span>
+          {loading ? (
+            <div className="flex justify-center items-center py-16">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+              {courses.map((course, index) => (
+                <Link
+                  key={course.id}
+                  to={`/course/${course.id}`}
+                  className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group animate-slide-in-up opacity-0 hover:scale-105"
+                  style={{ animationDelay: `${(index + 1) * 200}ms` }}
+                >
+                  <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group">
+                    <div className="overflow-hidden">
+                      <img
+                        src={getImageUrl(course.coverImage) || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80"}
+                        alt={course.title}
+                        className="w-full h-48 object-cover group-hover:scale-110 transition-transform duration-500"
+                        onError={(e) => {
+                          e.currentTarget.src = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80";
+                        }}
+                      />
                     </div>
-                  </div>
-                  <h3 className="font-bold text-lg text-textPrimary mb-2 group-hover:text-primary transition-colors">
-                    Développeur Web Full Stack
-                  </h3>
-                  <p className="text-gray-600 text-sm mb-4">
-                    Maîtrisez JavaScript, React, Node.js et créez des
-                    applications web modernes.
-                  </p>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4 text-sm text-gray-500">
-                      <div className="flex items-center space-x-1">
-                        <Clock className="w-4 h-4" />
-                        <span>6 mois</span>
+                    <div className="p-6">
+                      <div className="flex items-center space-x-2 mb-3">
+                        <span className="bg-accent/10 text-accent px-3 py-1 rounded-full text-xs font-medium group-hover:bg-accent group-hover:text-white transition-colors">
+                          {course.categoryName || 'Design'}
+                        </span>
+                        <div className="flex items-center space-x-1">
+                          <Star className="w-4 h-4 text-accent fill-current group-hover:scale-110 transition-transform" />
+                          <span className="text-sm text-gray-600">{course.rating.toFixed(1)}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-1">
-                        <User className="w-4 h-4" />
-                        <span>1,234 élèves</span>
+                      <h3 className="font-bold text-lg text-textPrimary mb-2 group-hover:text-primary transition-colors">
+                        {course.title}
+                      </h3>
+                      <p className="text-gray-600 text-sm mb-4">
+                        {course.description}
+                      </p>
+                      <div className="flex items-center space-x-4 text-sm text-gray-500">
+                        <div className="flex items-center space-x-1">
+                          <Clock className="w-4 h-4" />
+                          <span>{course.duration}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <User className="w-4 h-4" />
+                          <span>{course.students.toLocaleString()} élèves</span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            </a>
-
-            {/* Cours 2 */}
-            <a
-              className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group animate-slide-in-up opacity-0 animation-delay-400 hover:scale-105"
-              href="course/2"
-            >
-              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group">
-                <div className="overflow-hidden">
-                  <img
-                    src="https://images.unsplash.com/photo-1611224923853-80b023f02d71?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80"
-                    alt="UX Design"
-                    className="w-full h-48 object-cover group-hover:scale-110 transition-transform duration-500"
-                  />
-                </div>
-                <div className="p-6">
-                  <div className="flex items-center space-x-2 mb-3">
-                    <span className="bg-accent/10 text-accent px-3 py-1 rounded-full text-xs font-medium group-hover:bg-accent group-hover:text-white transition-colors">
-                      Design
-                    </span>
-                    <div className="flex items-center space-x-1">
-                      <Star className="w-4 h-4 text-accent fill-current group-hover:scale-110 transition-transform" />
-                      <span className="text-sm text-gray-600">4.8</span>
-                    </div>
-                  </div>
-                  <h3 className="font-bold text-lg text-textPrimary mb-2 group-hover:text-primary transition-colors">
-                    UX/UI Designer
-                  </h3>
-                  <p className="text-gray-600 text-sm mb-4">
-                    Concevez des expériences utilisateur exceptionnelles avec
-                    Figma et les méthodes UX.
-                  </p>
-                  <div className="flex items-center space-x-4 text-sm text-gray-500">
-                    <div className="flex items-center space-x-1">
-                      <Clock className="w-4 h-4" />
-                      <span>4 mois</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <User className="w-4 h-4" />
-                      <span>856 élèves</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </a>
-
-            {/* Cours 3 */}
-            <a
-              className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group animate-slide-in-up opacity-0 animation-delay-600 hover:scale-105"
-              href="course/3"
-            >
-              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group">
-                <div className="overflow-hidden">
-                  <img
-                    src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80"
-                    alt="Data Science"
-                    className="w-full h-48 object-cover group-hover:scale-110 transition-transform duration-500"
-                  />
-                </div>
-                <div className="p-6">
-                  <div className="flex items-center space-x-2 mb-3">
-                    <span className="bg-success/10 text-success px-3 py-1 rounded-full text-xs font-medium group-hover:bg-success group-hover:text-white transition-colors">
-                      Data
-                    </span>
-                    <div className="flex items-center space-x-1">
-                      <Star className="w-4 h-4 text-accent fill-current group-hover:scale-110 transition-transform" />
-                      <span className="text-sm text-gray-600">4.7</span>
-                    </div>
-                  </div>
-                  <h3 className="font-bold text-lg text-textPrimary mb-2 group-hover:text-primary transition-colors">
-                    Data Scientist
-                  </h3>
-                  <p className="text-gray-600 text-sm mb-4">
-                    Analysez et visualisez les données avec Python, SQL et les
-                    outils de Machine Learning.
-                  </p>
-                  <div className="flex items-center space-x-4 text-sm text-gray-500">
-                    <div className="flex items-center space-x-1">
-                      <Clock className="w-4 h-4" />
-                      <span>8 mois</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <User className="w-4 h-4" />
-                      <span>967 élèves</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </a>
-          </div>
+                </Link>
+              ))}
+            </div>
+          )}
 
           <div className="text-center animate-fade-in-up">
             <Link
@@ -302,7 +294,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Section témoignages avec photos */}
+      {/* Section témoignages */}
       <section className="py-20 bg-neutral">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16 animate-fade-in-up">
@@ -414,13 +406,24 @@ export default function Home() {
             compétences qui feront la différence dans votre carrière.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              to="/auth"
-              className="bg-accent text-white/90 px-8 py-4 rounded-lg font-semibold hover:bg-accent/90 transition-all duration-300 hover:scale-105 hover:shadow-lg inline-flex items-center justify-center space-x-2 group"
-            >
-              <span>Créer mon compte gratuit</span>
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </Link>
+            {/* Bouton CTA - masqué si connecté */}
+            {!isAuthenticated ? (
+              <Link
+                to="/auth"
+                className="bg-accent text-white/90 px-8 py-4 rounded-lg font-semibold hover:bg-accent/90 transition-all duration-300 hover:scale-105 hover:shadow-lg inline-flex items-center justify-center space-x-2 group"
+              >
+                <span>Créer mon compte gratuit</span>
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Link>
+            ) : (
+              <Link
+                to="/dashboard"
+                className="bg-accent text-white/90 px-8 py-4 rounded-lg font-semibold hover:bg-accent/90 transition-all duration-300 hover:scale-105 hover:shadow-lg inline-flex items-center justify-center space-x-2 group"
+              >
+                <span>Accéder à mon tableau de bord</span>
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Link>
+            )}
             <Link
               to="/courses"
               className="border border-primary text-primary px-8 py-4 rounded-lg font-semibold hover:bg-primary hover:text-white transition-all duration-300 hover:scale-105 text-center"

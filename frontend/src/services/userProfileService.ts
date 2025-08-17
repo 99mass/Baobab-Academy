@@ -3,12 +3,24 @@
 import axios from 'axios';
 import type { AxiosResponse } from 'axios';
 import type { ApiResponse } from '../types/auth';
-import type { Course } from '../types/course';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
-// Interface pour les cours avec progression
-export interface EnrolledCourse extends Course {
+export interface EnrolledCourse {
+  id: string;
+  title: string;
+  description: string;
+  coverImage?: string;
+  categoryId: string;
+  categoryName?: string;
+  instructorId: string;
+  level: string; 
+  duration: string;
+  students: number;
+  rating: number;
+  status: string; 
+  createdAt: string;
+  updatedAt?: string;
   progressPercentage: number;
   completedLessons: number;
   totalLessons: number;

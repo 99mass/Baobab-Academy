@@ -34,7 +34,10 @@ public class Lesson {
     @NotNull(message = "Le type de contenu est obligatoire")
     private ContentType contentType;
 
-    private String videoUrl; // URL YouTube/Vimeo pour les vidéos
+    private String videoUrl; // URL YouTube/Vimeo OU URL Cloudinary pour vidéos uploadées
+    
+    // 🆕 NOUVEAU CHAMP POUR LES DOCUMENTS
+    private String documentUrl; // URL Cloudinary pour les documents uploadés
 
     @NotNull(message = "Le chapitre est obligatoire")
     private String chapterId; // Référence vers Chapter
