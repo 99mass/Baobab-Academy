@@ -39,7 +39,7 @@ export default function Profile() {
   // Données mockées pour les cours (en attendant l'intégration backend)
   const enrolledCourses = mockCourses.filter(course => 
     // Ici vous pourrez utiliser les vraies données de l'utilisateur
-    [1, 2, 3].includes(course.id )
+    [1, 2, 3].includes(course.id)
   );
 
   const completedCourses = mockCourses.filter(course => 
@@ -239,9 +239,9 @@ export default function Profile() {
                       {user.firstName} {user.lastName}
                     </h1>
                     <p className="text-gray-600 mb-1 text-sm">{user.email}</p>
-                    {/* <p className="text-sm text-gray-500 mb-4">
+                    <p className="text-sm text-gray-500 mb-4">
                       Membre depuis {formatMemberSince(user.createdAt)}
-                    </p> */}
+                    </p>
                     <div className="flex items-center space-x-6 text-sm text-gray-500">
                       <span className="flex items-center space-x-2">
                         <BookOpen className="w-4 h-4" />

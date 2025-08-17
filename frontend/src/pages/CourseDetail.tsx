@@ -1,4 +1,5 @@
-import { useState } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   Clock,
@@ -11,20 +12,253 @@ import {
   ArrowLeft,
   Users,
 } from "lucide-react";
-import { mockCourses, mockChapters } from "../data/mockData";
+import { courseService } from "../services/courseService";
+import { useAuth } from "../hooks/useAuth";
+import type { Course } from "../types/course";
+
+interface CourseWithProgress {
+  course: Course;
+  enrolled: boolean;
+  progressPercentage: number;
+  completedLessons?: number;
+  totalLessons?: number;
+  isAdmin?: boolean;
+}
 
 export default function CourseDetail() {
-  const { id } = useParams();
-  const [expandedChapter, setExpandedChapter] = useState<string | null>("1");
+  const { id } = useParams<{ id: string }>();
+  const { isAuthenticated, user } = useAuth();
+  const [courseData, setCourseData] = useState<CourseWithProgress | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedChapter, setExpandedChapter] = useState<string | null>(null);
+  const [enrolling, setEnrolling] = useState(false);
 
-  const course = mockCourses.find((c) => c.id === id);
+  useEffect(() => {
+    if (id) {
+      loadCourse();
+    }
+  }, [id, isAuthenticated, user]); 
 
-  if (!course) {
+  const loadCourse = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (isAuthenticated && user) {
+        console.log("🔑 Utilisateur authentifié, chargement avec progression...");
+        
+        // Utiliser l'endpoint avec progression pour les utilisateurs connectés
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('Token non trouvé');
+        }
+
+        const response = await fetch(`http://localhost:8080/api/courses/${id}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        console.log("📡 Réponse API status:", response.status);
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log("📋 Données reçues:", result);
+          
+          if (result.success && result.data) {
+            setCourseData(result.data);
+            console.log("✅ Course data définie:", result.data);
+            
+            // Ouvrir automatiquement le premier chapitre
+            if (result.data.course?.chapters && result.data.course.chapters.length > 0) {
+              setExpandedChapter(result.data.course.chapters[0].id);
+            }
+          } else {
+            throw new Error(result.message || 'Données invalides reçues');
+          }
+        } else {
+          console.error("❌ Erreur API:", response.status, response.statusText);
+          
+          // Si l'endpoint authentifié échoue, essayer l'endpoint public
+          console.log("🔄 Tentative avec endpoint public...");
+          const publicResponse = await courseService.getPublishedCourseById(id || '');
+          setCourseData({
+            course: publicResponse.data!,
+            enrolled: false,
+            progressPercentage: 0,
+            isAdmin: user.role === 'ADMIN'
+          });
+        }
+      } else {
+        console.log("🌐 Utilisateur non authentifié, chargement public...");
+        
+        // Utiliser l'endpoint public pour les visiteurs
+        const response = await courseService.getPublishedCourseById(id || '');
+        const courseWithProgress = {
+          course: response.data!,
+          enrolled: false,
+          progressPercentage: 0,
+          isAdmin: false
+        };
+        setCourseData(courseWithProgress);
+        
+        // Ouvrir automatiquement le premier chapitre
+        if (response.data?.chapters && response.data.chapters.length > 0) {
+          setExpandedChapter(response.data.chapters[0].id);
+        }
+      }
+
+    } catch (err: any) {
+      console.error('❌ Erreur lors du chargement du cours:', err);
+      setError(err.message || 'Erreur lors du chargement du cours');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEnroll = async () => {
+    if (!isAuthenticated || !id) {
+      console.log("❌ Utilisateur non authentifié ou ID manquant");
+      return;
+    }
+
+    try {
+      setEnrolling(true);
+      console.log("🎯 Début inscription au cours:", id);
+      console.log("👤 Utilisateur:", user);
+      
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Token d\'authentification manquant');
+      }
+      
+      console.log("🔑 Token présent, envoi de la requête...");
+      
+      const response = await fetch(`http://localhost:8080/api/courses/${id}/enroll`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log("📡 Réponse inscription status:", response.status);
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log("✅ Inscription réussie:", result);
+        
+        // Afficher un message de succès
+        alert("🎉 Inscription réussie ! Vous pouvez maintenant commencer le cours.");
+        
+        // Recharger les données du cours pour mettre à jour l'état d'inscription
+        console.log("🔄 Rechargement des données du cours...");
+        await loadCourse();
+        
+      } else {
+        const errorData = await response.json();
+        console.error("❌ Erreur inscription:", errorData);
+        
+        // Gestion des erreurs spécifiques
+        if (response.status === 400 && errorData.message?.includes("déjà inscrit")) {
+          alert("ℹ️ Vous êtes déjà inscrit à ce cours !");
+          // Recharger quand même pour mettre à jour l'interface
+          await loadCourse();
+        } else {
+          throw new Error(errorData.message || 'Erreur lors de l\'inscription');
+        }
+      }
+    } catch (err: any) {
+      console.error('❌ Erreur lors de l\'inscription:', err);
+      
+      // Messages d'erreur plus spécifiques
+      let errorMessage = 'Erreur lors de l\'inscription';
+      
+      if (err.message.includes('Token')) {
+        errorMessage = 'Session expirée. Veuillez vous reconnecter.';
+      } else if (err.message.includes('network') || err.message.includes('fetch')) {
+        errorMessage = 'Problème de connexion. Vérifiez votre internet.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      alert(errorMessage);
+      
+      // Si c'est un problème de token, rediriger vers login
+      if (err.message.includes('Token') || err.message.includes('401')) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/auth';
+      }
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  const getLevelColor = (level: string) => {
+    switch (level) {
+      case "DEBUTANT":
+        return "bg-green-100 text-green-800";
+      case "INTERMEDIAIRE":
+        return "bg-yellow-100 text-yellow-800";
+      case "AVANCE":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getLevelLabel = (level: string) => {
+    switch (level) {
+      case "DEBUTANT":
+        return "Débutant";
+      case "INTERMEDIAIRE":
+        return "Intermédiaire";
+      case "AVANCE":
+        return "Avancé";
+      default:
+        return level;
+    }
+  };
+
+  const toggleChapter = (chapterId: string) => {
+    setExpandedChapter(expandedChapter === chapterId ? null : chapterId);
+  };
+
+  const getTotalLessons = () => {
+    if (!courseData?.course.chapters) return 0;
+    return courseData.course.chapters.reduce(
+      (total, chapter) => total + (chapter.lessons?.length || 0),
+      0
+    );
+  };
+
+  const getCompletedLessons = () => {
+    return courseData?.completedLessons || 0;
+  };
+
+  // État de chargement
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-neutral flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement du cours...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // État d'erreur
+  if (error || !courseData) {
     return (
       <div className="min-h-screen bg-neutral flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-textPrimary mb-4">
-            Cours non trouvé
+            {error || "Cours non trouvé"}
           </h1>
           <Link
             to="/courses"
@@ -37,37 +271,32 @@ export default function CourseDetail() {
     );
   }
 
-  const getLevelColor = (level: string) => {
-    switch (level) {
-      case "Débutant":
-        return "bg-green-100 text-green-800";
-      case "Intermédiaire":
-        return "bg-yellow-100 text-yellow-800";
-      case "Avancé":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
+  const { course } = courseData; // ✅ Destructurer seulement course
+  
+  // ✅ Accès direct aux propriétés pour éviter les undefined
+  const enrolled = courseData.enrolled || false;
+  const progressPercentage = courseData.progressPercentage || 0;
+  const isAdmin = courseData.isAdmin || (user?.role === 'ADMIN') || false;
 
-  const toggleChapter = (chapterId: string) => {
-    setExpandedChapter(expandedChapter === chapterId ? null : chapterId);
-  };
+  // 🔧 DEBUG DÉTAILLÉ
+  console.log("🎯 Rendu avec:", { 
+    isAuthenticated, 
+    enrolled, 
+    isAdmin, 
+    userRole: user?.role,
+    progressPercentage,
+    rawEnrolled: courseData.enrolled, // ✅ Vérifier la valeur brute
+    courseDataFull: courseData
+  });
 
-  const getTotalLessons = () => {
-    return mockChapters.reduce(
-      (total, chapter) => total + chapter.lessons.length,
-      0
-    );
-  };
-
-  const getCompletedLessons = () => {
-    return mockChapters.reduce(
-      (total, chapter) =>
-        total + chapter.lessons.filter((lesson) => lesson.isCompleted).length,
-      0
-    );
-  };
+  // 🔧 DEBUG SPÉCIFIQUE POUR L'ENROLLMENT CARD
+  console.log("DEBUG Enrollment Card:", {
+    condition1: enrolled,
+    condition2: isAdmin,
+    condition3: enrolled || isAdmin,
+    shouldShowEnrolledCard: enrolled || isAdmin,
+    rawData: { enrolled: courseData.enrolled, isEnrolled: courseData.enrolled }
+  });
 
   return (
     <div className="min-h-screen bg-neutral">
@@ -75,11 +304,15 @@ export default function CourseDetail() {
       <div className="relative">
         {/* Hero Image */}
         <div className="h-96 bg-gradient-to-r from-black/60 to-black/40 relative overflow-hidden">
-          <img
-            src={course.image}
-            alt={course.title}
-            className="w-full h-full object-cover absolute inset-0"
-          />
+          {course.coverImage ? (
+            <img
+              src={course.coverImage}
+              alt={course.title}
+              className="w-full h-full object-cover absolute inset-0"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-primary/80 to-accent/80 absolute inset-0" />
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
 
           {/* Content */}
@@ -100,7 +333,7 @@ export default function CourseDetail() {
                 {/* Course Info */}
                 <div className="mb-4">
                   <span className="inline-block px-3 py-1 bg-accent/90 text-white rounded-full text-sm font-medium mb-4">
-                    {course.category}
+                    {course.categoryName || 'Général'}
                   </span>
                 </div>
 
@@ -129,16 +362,16 @@ export default function CourseDetail() {
                         course.level
                       )} text-gray-800`}
                     >
-                      {course.level}
+                      {getLevelLabel(course.level)}
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Users className="w-5 h-5" />
-                    <span>1,234 étudiants</span>
+                    <span>{course.students?.toLocaleString() || 0} étudiants</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Star className="w-5 h-5 text-yellow-400" />
-                    <span>4.8 (156 avis)</span>
+                    <span>{course.rating?.toFixed(1) || 0}</span>
                   </div>
                 </div>
               </div>
@@ -153,25 +386,41 @@ export default function CourseDetail() {
           {/* Main Content */}
           <div className="lg:col-span-2">
             {/* Progress Bar (if enrolled) */}
-            {course.isEnrolled && course.progress !== undefined && (
+            {enrolled && !isAdmin && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-textPrimary">
                     Votre progression
                   </h2>
                   <span className="text-primary font-medium">
-                    {course.progress}%
+                    {Math.round(progressPercentage)}%
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
                   <div
                     className="bg-gradient-to-r from-primary to-success h-3 rounded-full transition-all duration-500"
-                    style={{ width: `${course.progress}%` }}
+                    style={{ width: `${progressPercentage}%` }}
                   ></div>
                 </div>
                 <p className="text-sm text-gray-600">
-                  {getCompletedLessons()} sur {getTotalLessons()} leçons
-                  terminées
+                  {getCompletedLessons()} sur {getTotalLessons()} leçons terminées
+                </p>
+              </div>
+            )}
+
+            {/* Admin Info */}
+            {isAdmin && (
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-6 mb-8">
+                <div className="flex items-center space-x-3 mb-2">
+                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                    <Users className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <h2 className="text-lg font-semibold text-purple-800">
+                    Mode Administrateur
+                  </h2>
+                </div>
+                <p className="text-purple-700 text-sm">
+                  Vous visualisez ce cours en tant qu'administrateur. Vous avez accès à toutes les fonctionnalités.
                 </p>
               </div>
             )}
@@ -183,58 +432,29 @@ export default function CourseDetail() {
               </h2>
               <div className="prose prose-lg max-w-none text-gray-700">
                 <p className="mb-4">
-                  Ce cours complet vous permettra de maîtriser les fondamentaux
-                  du développement web moderne. Vous apprendrez à créer des
-                  sites web interactifs et responsives en utilisant les
-                  technologies les plus demandées sur le marché.
-                </p>
-                <p className="mb-4">
-                  À travers des projets pratiques et des exercices progressifs,
-                  vous développerez une compréhension solide des concepts clés
-                  et des meilleures pratiques du développement web.
+                  {course.description}
                 </p>
 
-                <h3 className="text-xl font-semibold text-textPrimary mt-8 mb-4">
+                <h3 className="text-xl font-semibold text-textPrimary mt-8 mb-2">
                   Ce que vous allez apprendre
                 </h3>
                 <ul className="space-y-2">
                   <li className="flex items-start space-x-3">
                     <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
-                    <span>Les bases du HTML5 et de la sémantique web</span>
+                    <span>Maîtriser les concepts fondamentaux du domaine</span>
                   </li>
                   <li className="flex items-start space-x-3">
                     <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
-                    <span>
-                      Le CSS3 avancé et les techniques de layout modernes
-                    </span>
-                  </li>
-                  <li className="flex items-start space-x-3">
-                    <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
-                    <span>
-                      JavaScript ES6+ et la programmation orientée objet
-                    </span>
-                  </li>
-                  <li className="flex items-start space-x-3">
-                    <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
-                    <span>Le développement responsive et mobile-first</span>
-                  </li>
-                  <li className="flex items-start space-x-3">
-                    <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
-                    <span>
-                      Les outils de développement et les bonnes pratiques
-                    </span>
+                    <span>Acquérir des compétences pratiques et applicables</span>
                   </li>
                 </ul>
 
-                <h3 className="text-xl font-semibold text-textPrimary mt-8 mb-4">
+                <h3 className="text-xl font-semibold text-textPrimary mt-8 mb-2">
                   Prérequis
                 </h3>
                 <ul className="space-y-2">
-                  <li>
-                    • Aucune expérience préalable en programmation requise
-                  </li>
-                  <li>• Un ordinateur avec accès à Internet</li>
                   <li>• Motivation pour apprendre et pratiquer</li>
+                  <li>• Un ordinateur ou une tablette ou un smartphone avec accès à Internet</li>
                 </ul>
               </div>
             </div>
@@ -246,7 +466,7 @@ export default function CourseDetail() {
               </h2>
 
               <div className="space-y-4">
-                {mockChapters.map((chapter) => (
+                {course.chapters?.map((chapter) => (
                   <div
                     key={chapter.id}
                     className="border border-gray-200 rounded-lg"
@@ -258,7 +478,7 @@ export default function CourseDetail() {
                       <div className="flex items-center space-x-3">
                         <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
                           <span className="text-primary font-medium text-sm">
-                            {chapter.id}
+                            {chapter.orderIndex}
                           </span>
                         </div>
                         <div>
@@ -266,7 +486,7 @@ export default function CourseDetail() {
                             {chapter.title}
                           </h3>
                           <p className="text-sm text-gray-600">
-                            {chapter.lessons.length} leçons
+                            {chapter.lessons?.length || 0} leçons
                           </p>
                         </div>
                       </div>
@@ -277,7 +497,7 @@ export default function CourseDetail() {
                       />
                     </button>
 
-                    {expandedChapter === chapter.id && (
+                    {expandedChapter === chapter.id && chapter.lessons && (
                       <div className="border-t border-gray-200">
                         {chapter.lessons.map((lesson) => (
                           <div
@@ -285,26 +505,23 @@ export default function CourseDetail() {
                             className="flex items-center justify-between p-4 pl-16 hover:bg-gray-50 transition-colors"
                           >
                             <div className="flex items-center space-x-3">
-                              {lesson.isCompleted ? (
-                                <CheckCircle className="w-5 h-5 text-success" />
-                              ) : (
-                                <Play className="w-5 h-5 text-gray-400" />
-                              )}
+                              <Play className="w-5 h-5 text-gray-400" />
                               <div>
                                 <h4 className="font-medium text-textPrimary">
                                   {lesson.title}
                                 </h4>
                                 <p className="text-sm text-gray-600">
-                                  {lesson.duration}
+                                  {lesson.contentType === 'VIDEO' ? 'Vidéo' : 
+                                   lesson.contentType === 'TEXT' ? 'Texte' : 'Document'}
                                 </p>
                               </div>
                             </div>
-                            {course.isEnrolled && (
+                            {(enrolled || isAdmin) && (
                               <Link
-                                to={`/course/${course.id}/lesson/${lesson.id}`}
+                                to={`/player/${course.id}/${lesson.id}`}
                                 className="text-primary hover:text-primary/80 transition-colors text-sm font-medium"
                               >
-                                {lesson.isCompleted ? "Revoir" : "Commencer"}
+                                {isAdmin ? 'Prévisualiser' : 'Commencer'}
                               </Link>
                             )}
                           </div>
@@ -312,7 +529,12 @@ export default function CourseDetail() {
                       </div>
                     )}
                   </div>
-                ))}
+                )) || (
+                  <div className="text-center py-8 text-gray-500">
+                    <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p>Le contenu du cours sera bientôt disponible.</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -322,29 +544,31 @@ export default function CourseDetail() {
             <div className="sticky top-24">
               {/* Enrollment Card */}
               <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8 mb-6">
-                {course.isEnrolled ? (
+                {(enrolled || isAdmin) ? (
                   <>
                     <h3 className="text-xl font-bold text-textPrimary mb-6">
-                      Votre parcours
+                      {isAdmin ? 'Aperçu Administrateur' : 'Votre parcours'}
                     </h3>
 
-                    {/* Progress */}
-                    <div className="mb-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-700">
-                          Progression
-                        </span>
-                        <span className="text-sm font-medium text-primary">
-                          {course.progress}%
-                        </span>
+                    {/* Progress - Seulement pour les utilisateurs vraiment inscrits */}
+                    {enrolled && !isAdmin && (
+                      <div className="mb-6">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-700">
+                            Progression
+                          </span>
+                          <span className="text-sm font-medium text-primary">
+                            {Math.round(progressPercentage)}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-gradient-to-r from-primary to-success h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${progressPercentage}%` }}
+                          ></div>
+                        </div>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-gradient-to-r from-primary to-success h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${course.progress}%` }}
-                        ></div>
-                      </div>
-                    </div>
+                    )}
 
                     <Link
                       to={`/player/${course.id}`}
@@ -352,15 +576,27 @@ export default function CourseDetail() {
                     >
                       <Play className="w-5 h-5" />
                       <span>
-                        {course.progress && course.progress > 0
+                        {isAdmin 
+                          ? 'Prévisualiser le cours'
+                          : progressPercentage && progressPercentage > 0
                           ? "Continuer le cours"
-                          : "Commencer le cours"}
+                          : "Commencer le cours"
+                        }
                       </span>
                     </Link>
 
-                    <button className="w-full border border-gray-300 text-textPrimary py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors">
-                      Télécharger les ressources
-                    </button>
+                    {isAdmin ? (
+                      <Link
+                        to={`/admin/course/edit/${course.id}`}
+                        className="w-full border border-primary text-primary py-3 rounded-lg font-medium hover:bg-primary/10 transition-colors text-center block"
+                      >
+                        ⚙️ Modifier le cours
+                      </Link>
+                    ) : (
+                      <button className="w-full border border-gray-300 text-textPrimary py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors">
+                        Télécharger les ressources
+                      </button>
+                    )}
                   </>
                 ) : (
                   <>
@@ -371,28 +607,40 @@ export default function CourseDetail() {
                       <p className="text-gray-600">Accès illimité à vie</p>
                     </div>
 
-                    <Link to="/auth">
-                      <button className="w-full bg-primary text-white py-4 rounded-lg font-semibold hover:bg-primary/90 transition-colors mb-4">
-                        S'inscrire gratuitement
+                    {isAuthenticated ? (
+                      <button
+                        onClick={handleEnroll}
+                        disabled={enrolling}
+                        className="w-full bg-primary text-white py-4 rounded-lg font-semibold hover:bg-primary/90 transition-colors mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {enrolling ? (
+                          <div className="flex items-center justify-center space-x-2">
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Inscription en cours...</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center space-x-2">
+                            <Users className="w-5 h-5" />
+                            <span>S'inscrire gratuitement</span>
+                          </div>
+                        )}
                       </button>
-                    </Link>
+                    ) : (
+                      <Link to="/auth">
+                        <button className="w-full bg-primary text-white py-4 rounded-lg font-semibold hover:bg-primary/90 transition-colors mb-4">
+                          S'inscrire gratuitement
+                        </button>
+                      </Link>
+                    )}
 
                     <p className="text-center text-sm text-gray-500 mb-6">
-                      30 jours de garantie satisfait ou remboursé
+                      Cours entièrement gratuit
                     </p>
 
                     <div className="space-y-3 text-sm">
                       <div className="flex items-center space-x-3">
                         <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
                         <span>Accès illimité au cours</span>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
-                        <span>Certificat de completion</span>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
-                        <span>Support communauté</span>
                       </div>
                       <div className="flex items-center space-x-3">
                         <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
@@ -415,29 +663,34 @@ export default function CourseDetail() {
                     <span className="font-medium">{course.duration}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Nombre de leçons</span>
-                    <span className="font-medium">{getTotalLessons()}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
                     <span className="text-gray-600">Niveau</span>
                     <span
                       className={`px-2 py-1 rounded text-xs font-medium ${getLevelColor(
                         course.level
                       )}`}
                     >
-                      {course.level}
+                      {getLevelLabel(course.level)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Langue</span>
-                    <span className="font-medium">Français</span>
+                    <span className="text-gray-600">Dernière mise à jour</span>
+                    <span className="font-medium">
+                      {course.updatedAt 
+                        ? new Date(course.updatedAt).toLocaleDateString('fr-FR', {
+                            month: 'long',
+                            year: 'numeric'
+                          })
+                        : 'Récemment'
+                      }
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Dernière mise à jour</span>
-                    <span className="font-medium">Janvier 2025</span>
+                    <span className="text-gray-600">Catégorie</span>
+                    <span className="font-medium">{course.categoryName || 'Général'}</span>
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         </div>

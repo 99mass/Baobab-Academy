@@ -4,7 +4,6 @@ import {
   BookOpen,
   Users,
   Award,
-  Play,
   Search,
   Star,
   Clock,
@@ -81,11 +80,11 @@ export default function Home() {
                   className="rounded-2xl shadow-2xl hover:scale-105 transition-transform duration-500"
                 />
                 {/* Badge de lecture vidéo */}
-                <div className="absolute inset-0 flex items-center justify-center">
+                {/* <div className="absolute inset-0 flex items-center justify-center">
                   <button className="bg-white/90 hover:bg-white p-6 rounded-full shadow-lg transition-all duration-300 hover:scale-110 animate-pulse-slow">
                     <Play className="w-8 h-8 text-primary fill-current" />
                   </button>
-                </div>
+                </div> */}
                 {/* Petites cartes flottantes */}
                 <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-xl shadow-lg animate-float">
                   <div className="flex items-center space-x-3">

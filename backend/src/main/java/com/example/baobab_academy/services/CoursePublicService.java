@@ -31,15 +31,16 @@ public class CoursePublicService {
     private final CategoryRepository categoryRepository;
     private final ChapterRepository chapterRepository;
     private final LessonRepository lessonRepository;
+    private final UserProgressRepository userProgressRepository;
     private final ModelMapper modelMapper;
 
     /**
      * Récupère tous les cours publiés avec pagination
      */
     public Page<CourseResponse> getAllPublishedCourses(Pageable pageable) {
-        log.info("📚 Récupération des cours publiés - Page: {}, Taille: {}", 
+        log.info("📚 Récupération des cours publiés - Page: {}, Taille: {}",
                 pageable.getPageNumber(), pageable.getPageSize());
-        
+
         Page<Course> courses = courseRepository.findByStatus(CourseStatus.PUBLISHED, pageable);
         return courses.map(this::mapToCourseResponse);
     }
@@ -49,7 +50,7 @@ public class CoursePublicService {
      */
     public Page<CourseResponse> getPublishedCoursesByCategory(String categoryId, Pageable pageable) {
         log.info("📚 Récupération des cours de la catégorie: {}", categoryId);
-        
+
         Page<Course> courses = courseRepository.findByCategoryIdAndStatus(categoryId, CourseStatus.PUBLISHED, pageable);
         return courses.map(this::mapToCourseResponse);
     }
@@ -59,9 +60,9 @@ public class CoursePublicService {
      */
     public Page<CourseResponse> searchPublishedCourses(String searchTerm, String categoryId, Pageable pageable) {
         log.info("🔍 Recherche de cours: '{}' dans la catégorie: {}", searchTerm, categoryId);
-        
+
         Page<Course> courses;
-        
+
         if (categoryId != null && !categoryId.trim().isEmpty()) {
             // Recherche dans une catégorie spécifique
             courses = courseRepository.searchByTitleOrDescriptionAndStatus(searchTerm, CourseStatus.PUBLISHED, pageable)
@@ -69,9 +70,10 @@ public class CoursePublicService {
                     .map(Course.class::cast);
         } else {
             // Recherche globale
-            courses = courseRepository.searchByTitleOrDescriptionAndStatus(searchTerm, CourseStatus.PUBLISHED, pageable);
+            courses = courseRepository.searchByTitleOrDescriptionAndStatus(searchTerm, CourseStatus.PUBLISHED,
+                    pageable);
         }
-        
+
         return courses.map(this::mapToCourseResponse);
     }
 
@@ -80,24 +82,24 @@ public class CoursePublicService {
      */
     public CourseResponse getPublishedCourseById(String courseId) {
         log.info("📖 Récupération du cours publié: {}", courseId);
-        
+
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new RuntimeException("Cours non trouvé"));
-        
+
         if (course.getStatus() != CourseStatus.PUBLISHED) {
             throw new RuntimeException("Ce cours n'est pas encore publié");
         }
-        
+
         CourseResponse response = mapToCourseResponse(course);
-        
+
         // Ajouter les chapitres et leçons
         List<Chapter> chapters = chapterRepository.findByCourseIdOrderByOrderIndex(courseId);
         List<ChapterResponse> chapterResponses = chapters.stream()
                 .map(this::mapToChapterResponse)
                 .collect(Collectors.toList());
-        
+
         response.setChapters(chapterResponses);
-        
+
         return response;
     }
 
@@ -106,10 +108,10 @@ public class CoursePublicService {
      */
     public List<CourseResponse> getPopularCourses(int limit) {
         log.info("🌟 Récupération des {} cours les plus populaires", limit);
-        
+
         Pageable pageable = PageRequest.of(0, limit);
         List<Course> courses = courseRepository.findTopByStatusOrderByStudentsDesc(CourseStatus.PUBLISHED, pageable);
-        
+
         return courses.stream()
                 .map(this::mapToCourseResponse)
                 .collect(Collectors.toList());
@@ -120,10 +122,10 @@ public class CoursePublicService {
      */
     public List<CourseResponse> getTopRatedCourses(int limit) {
         log.info("⭐ Récupération des {} cours les mieux notés", limit);
-        
+
         Pageable pageable = PageRequest.of(0, limit);
         List<Course> courses = courseRepository.findTopByStatusOrderByRatingDesc(CourseStatus.PUBLISHED, pageable);
-        
+
         return courses.stream()
                 .map(this::mapToCourseResponse)
                 .collect(Collectors.toList());
@@ -134,10 +136,10 @@ public class CoursePublicService {
      */
     public List<CourseResponse> getLatestCourses(int limit) {
         log.info("🆕 Récupération des {} derniers cours", limit);
-        
+
         Pageable pageable = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Course> coursePage = courseRepository.findByStatus(CourseStatus.PUBLISHED, pageable);
-        
+
         return coursePage.getContent().stream()
                 .map(this::mapToCourseResponse)
                 .collect(Collectors.toList());
@@ -155,13 +157,20 @@ public class CoursePublicService {
      */
     private CourseResponse mapToCourseResponse(Course course) {
         CourseResponse response = modelMapper.map(course, CourseResponse.class);
-        
+
         // Ajouter le nom de la catégorie
         if (course.getCategoryId() != null) {
             categoryRepository.findById(course.getCategoryId())
                     .ifPresent(category -> response.setCategoryName(category.getName()));
         }
-        
+
+        // 🆕 NOUVEAUTÉ : Calculer dynamiquement le nombre d'étudiants inscrits
+        long enrolledStudents = userProgressRepository.countDistinctUsersByCourseId(course.getId());
+        response.setStudents((int) enrolledStudents);
+
+        log.debug("📊 Cours {}: {} étudiants inscrits calculés dynamiquement",
+                course.getId(), enrolledStudents);
+
         return response;
     }
 
@@ -170,15 +179,15 @@ public class CoursePublicService {
      */
     private ChapterResponse mapToChapterResponse(Chapter chapter) {
         ChapterResponse response = modelMapper.map(chapter, ChapterResponse.class);
-        
+
         // Ajouter les leçons
         List<Lesson> lessons = lessonRepository.findByChapterIdOrderByOrderIndex(chapter.getId());
         List<LessonResponse> lessonResponses = lessons.stream()
                 .map(lesson -> modelMapper.map(lesson, LessonResponse.class))
                 .collect(Collectors.toList());
-        
+
         response.setLessons(lessonResponses);
-        
+
         return response;
     }
 }

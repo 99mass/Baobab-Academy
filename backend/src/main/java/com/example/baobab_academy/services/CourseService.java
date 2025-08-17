@@ -42,8 +42,8 @@ public class CourseService {
         log.info("🎓 Création d'un nouveau cours: {}", request.getTitle());
 
         // Vérifier que la catégorie existe
-        Category category = categoryRepository.findById(request.getCategoryId())
-                .orElseThrow(() -> new RuntimeException("Catégorie non trouvée"));
+        // Category category = categoryRepository.findById(request.getCategoryId())
+        //         .orElseThrow(() -> new RuntimeException("Catégorie non trouvée"));
 
         Course course = Course.builder()
                 .title(request.getTitle())
