@@ -34,7 +34,6 @@ import java.io.IOException;
 @Slf4j
 @Tag(name = "Course Management", description = "Gestion des cours (Admin uniquement)")
 @PreAuthorize("hasRole('ADMIN')")
-@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:5173"})
 public class CourseController {
 
     private final CourseService courseService;

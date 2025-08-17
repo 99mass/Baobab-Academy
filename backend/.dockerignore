@@ -1,0 +1,24 @@
+# Fichiers à ignorer lors du build Docker
+target/
+.git/
+.gitignore
+README.md
+.env
+.env.local
+.DS_Store
+node_modules/
+nixpacks.toml
+railway.toml
+
+# Fichiers IDE
+.idea/
+.vscode/
+*.iml
+
+# Logs
+*.log
+logs/
+
+# Fichiers temporaires
+*.tmp
+*.swp

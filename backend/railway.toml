@@ -1,0 +1,5 @@
+[build]
+builder = "dockerfile"
+
+[env]
+SPRING_PROFILES_ACTIVE = "production"
