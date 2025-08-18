@@ -254,6 +254,8 @@ Développement d'une solution web complète incluant interface d'administration,
 - Recherche et filtrage de contenu
 - Interface responsive
 
+## Lien du site
+ - https://baobab-academy-frontend.vercel.app/
 ### Admin par defaut
  - Email: admin@baobabacademy.com
  - Mot de passe: admin123!
