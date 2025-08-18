@@ -253,3 +253,7 @@ Développement d'une solution web complète incluant interface d'administration,
 - Consultation de cours avec suivi de progression
 - Recherche et filtrage de contenu
 - Interface responsive
+
+### Admin par defaut
+ - Email: admin@baobabacademy.com
+ - Mot de passe: admin123!
