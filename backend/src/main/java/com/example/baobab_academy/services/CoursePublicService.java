@@ -32,6 +32,7 @@ public class CoursePublicService {
     private final ChapterRepository chapterRepository;
     private final LessonRepository lessonRepository;
     private final UserProgressRepository userProgressRepository;
+    private final CourseRatingRepository courseRatingRepository;
     private final ModelMapper modelMapper;
 
     /**
@@ -168,8 +169,12 @@ public class CoursePublicService {
         long enrolledStudents = userProgressRepository.countDistinctUsersByCourseId(course.getId());
         response.setStudents((int) enrolledStudents);
 
-        log.debug("📊 Cours {}: {} étudiants inscrits calculés dynamiquement",
-                course.getId(), enrolledStudents);
+        // 🆕 NOUVEAUTÉ : Ajouter le nombre total de notes
+        long totalRatings = courseRatingRepository.countByCourseId(course.getId());
+        response.setTotalRatings(totalRatings);
+
+        log.debug("📊 Cours {}: {} étudiants inscrits, {} notes, note moyenne: {}",
+                course.getId(), enrolledStudents, totalRatings, course.getRating());
 
         return response;
     }

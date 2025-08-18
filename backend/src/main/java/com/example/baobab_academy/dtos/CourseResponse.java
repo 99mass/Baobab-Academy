@@ -23,4 +23,5 @@ public class CourseResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<ChapterResponse> chapters;
+    private Long totalRatings;
 }

@@ -57,4 +57,7 @@ public interface UserProgressRepository extends MongoRepository<UserProgress, St
                 .distinct()
                 .count();
     }
+
+    long countByUserIdAndCourseId(String userId, String courseId);
+
 }

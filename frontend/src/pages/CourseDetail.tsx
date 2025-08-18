@@ -1,5 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// /* eslint-disable react-hooks/exhaustive-deps */
+// /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -12,10 +14,12 @@ import {
   ChevronDown,
   ArrowLeft,
   Users,
+  X, // Added X icon for close button
 } from "lucide-react";
 import { courseService } from "../services/courseService";
 import { useAuth } from "../hooks/useAuth";
 import type { Course } from "../types/course";
+import CourseRatingComponent from "../components/courseRatingComponent";
 
 interface CourseWithProgress {
   course: Course;
@@ -26,7 +30,33 @@ interface CourseWithProgress {
   isAdmin?: boolean;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+// Modal Component
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 relative">
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 text-gray-500 hover:text-gray-700"
+        >
+          <X size={24} />
+        </button>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
 export default function CourseDetail() {
   const { id } = useParams<{ id: string }>();
@@ -36,12 +66,17 @@ export default function CourseDetail() {
   const [error, setError] = useState<string | null>(null);
   const [expandedChapter, setExpandedChapter] = useState<string | null>(null);
   const [enrolling, setEnrolling] = useState(false);
+  const [currentRating, setCurrentRating] = useState(0);
+  const [totalRatings, setTotalRatings] = useState(0);
+  const [showRatingSection, setShowRatingSection] = useState(false);
+
+  // Removed ratingComponentRef
 
   useEffect(() => {
     if (id) {
       loadCourse();
     }
-  }, [id, isAuthenticated, user]); 
+  }, [id, isAuthenticated, user]);
 
   const loadCourse = async () => {
     try {
@@ -49,74 +84,86 @@ export default function CourseDetail() {
       setError(null);
 
       if (isAuthenticated && user) {
-        console.log("🔑 Utilisateur authentifié, chargement avec progression...");
-        
+        console.log(
+          "🔑 Utilisateur authentifié, chargement avec progression..."
+        );
+
         // Utiliser l'endpoint avec progression pour les utilisateurs connectés
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem("token");
         if (!token) {
-          throw new Error('Token non trouvé');
+          throw new Error("Token non trouvé");
         }
 
         const response = await fetch(`${API_BASE_URL}/courses/${id}`, {
-          method: 'GET',
+          method: "GET",
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
         });
-        
+
         console.log("📡 Réponse API status:", response.status);
-        
+
         if (response.ok) {
           const result = await response.json();
           console.log("📋 Données reçues:", result);
-          
+
           if (result.success && result.data) {
             setCourseData(result.data);
+            setCurrentRating(result.data.course.rating || 0);
+            setTotalRatings(result.data.course.totalRatings || 0);
             console.log("✅ Course data définie:", result.data);
-            
+
             // Ouvrir automatiquement le premier chapitre
-            if (result.data.course?.chapters && result.data.course.chapters.length > 0) {
+            if (
+              result.data.course?.chapters &&
+              result.data.course.chapters.length > 0
+            ) {
               setExpandedChapter(result.data.course.chapters[0].id);
             }
           } else {
-            throw new Error(result.message || 'Données invalides reçues');
+            throw new Error(result.message || "Données invalides reçues");
           }
         } else {
           console.error("❌ Erreur API:", response.status, response.statusText);
-          
+
           // Si l'endpoint authentifié échoue, essayer l'endpoint public
           console.log("🔄 Tentative avec endpoint public...");
-          const publicResponse = await courseService.getPublishedCourseById(id || '');
+          const publicResponse = await courseService.getPublishedCourseById(
+            id || ""
+          );
           setCourseData({
             course: publicResponse.data!,
             enrolled: false,
             progressPercentage: 0,
-            isAdmin: user.role === 'ADMIN'
+            isAdmin: user.role === "ADMIN",
           });
+          setCurrentRating(publicResponse.data?.rating || 0);
+          setTotalRatings(publicResponse.data?.totalRatings || 0);
         }
       } else {
         console.log("🌐 Utilisateur non authentifié, chargement public...");
-        
+
         // Utiliser l'endpoint public pour les visiteurs
-        const response = await courseService.getPublishedCourseById(id || '');
+        const response = await courseService.getPublishedCourseById(id || "");
         const courseWithProgress = {
           course: response.data!,
           enrolled: false,
           progressPercentage: 0,
-          isAdmin: false
+          isAdmin: false,
         };
         setCourseData(courseWithProgress);
-        
+        setCurrentRating(response.data?.rating || 0);
+        setTotalRatings(response.data?.totalRatings || 0);
+
         // Ouvrir automatiquement le premier chapitre
         if (response.data?.chapters && response.data.chapters.length > 0) {
           setExpandedChapter(response.data.chapters[0].id);
         }
       }
-
     } catch (err: any) {
-      console.error('❌ Erreur lors du chargement du cours:', err);
-      setError(err.message || 'Erreur lors du chargement du cours');
+      console.error("❌ Erreur lors du chargement du cours:", err);
+      setError(err.message || "Erreur lors du chargement du cours");
     } finally {
       setLoading(false);
     }
@@ -132,69 +179,76 @@ export default function CourseDetail() {
       setEnrolling(true);
       console.log("🎯 Début inscription au cours:", id);
       console.log("👤 Utilisateur:", user);
-      
-      const token = localStorage.getItem('token');
+
+      const token = localStorage.getItem("token");
       if (!token) {
-        throw new Error('Token d\'authentification manquant');
+        throw new Error("Token d'authentification manquant");
       }
-      
+
       console.log("🔑 Token présent, envoi de la requête...");
 
       const response = await fetch(`${API_BASE_URL}/courses/${id}/enroll`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       });
 
       console.log("📡 Réponse inscription status:", response.status);
-      
+
       if (response.ok) {
         const result = await response.json();
         console.log("✅ Inscription réussie:", result);
-        
+
         // Afficher un message de succès
-        alert("🎉 Inscription réussie ! Vous pouvez maintenant commencer le cours.");
-        
+        alert(
+          "🎉 Inscription réussie ! Vous pouvez maintenant commencer le cours."
+        );
+
         // Recharger les données du cours pour mettre à jour l'état d'inscription
         console.log("🔄 Rechargement des données du cours...");
         await loadCourse();
-        
       } else {
         const errorData = await response.json();
         console.error("❌ Erreur inscription:", errorData);
-        
+
         // Gestion des erreurs spécifiques
-        if (response.status === 400 && errorData.message?.includes("déjà inscrit")) {
+        if (
+          response.status === 400 &&
+          errorData.message?.includes("déjà inscrit")
+        ) {
           alert("ℹ️ Vous êtes déjà inscrit à ce cours !");
           // Recharger quand même pour mettre à jour l'interface
           await loadCourse();
         } else {
-          throw new Error(errorData.message || 'Erreur lors de l\'inscription');
+          throw new Error(errorData.message || "Erreur lors de l'inscription");
         }
       }
     } catch (err: any) {
-      console.error('❌ Erreur lors de l\'inscription:', err);
-      
+      console.error("❌ Erreur lors de l'inscription:", err);
+
       // Messages d'erreur plus spécifiques
-      let errorMessage = 'Erreur lors de l\'inscription';
-      
-      if (err.message.includes('Token')) {
-        errorMessage = 'Session expirée. Veuillez vous reconnecter.';
-      } else if (err.message.includes('network') || err.message.includes('fetch')) {
-        errorMessage = 'Problème de connexion. Vérifiez votre internet.';
+      let errorMessage = "Erreur lors de l'inscription";
+
+      if (err.message.includes("Token")) {
+        errorMessage = "Session expirée. Veuillez vous reconnecter.";
+      } else if (
+        err.message.includes("network") ||
+        err.message.includes("fetch")
+      ) {
+        errorMessage = "Problème de connexion. Vérifiez votre internet.";
       } else if (err.message) {
         errorMessage = err.message;
       }
-      
+
       alert(errorMessage);
-      
+
       // Si c'est un problème de token, rediriger vers login
-      if (err.message.includes('Token') || err.message.includes('401')) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/auth';
+      if (err.message.includes("Token") || err.message.includes("401")) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "/auth";
       }
     } finally {
       setEnrolling(false);
@@ -275,21 +329,21 @@ export default function CourseDetail() {
   }
 
   const { course } = courseData; // ✅ Destructurer seulement course
-  
+
   // ✅ Accès direct aux propriétés pour éviter les undefined
   const enrolled = courseData.enrolled || false;
   const progressPercentage = courseData.progressPercentage || 0;
-  const isAdmin = courseData.isAdmin || (user?.role === 'ADMIN') || false;
+  const isAdmin = courseData.isAdmin || user?.role === "ADMIN" || false;
 
   // 🔧 DEBUG DÉTAILLÉ
-  console.log("🎯 Rendu avec:", { 
-    isAuthenticated, 
-    enrolled, 
-    isAdmin, 
+  console.log("🎯 Rendu avec:", {
+    isAuthenticated,
+    enrolled,
+    isAdmin,
     userRole: user?.role,
     progressPercentage,
     rawEnrolled: courseData.enrolled, // ✅ Vérifier la valeur brute
-    courseDataFull: courseData
+    courseDataFull: courseData,
   });
 
   // 🔧 DEBUG SPÉCIFIQUE POUR L'ENROLLMENT CARD
@@ -298,8 +352,22 @@ export default function CourseDetail() {
     condition2: isAdmin,
     condition3: enrolled || isAdmin,
     shouldShowEnrolledCard: enrolled || isAdmin,
-    rawData: { enrolled: courseData.enrolled, isEnrolled: courseData.enrolled }
+    rawData: { enrolled: courseData.enrolled, isEnrolled: courseData.enrolled },
   });
+
+  const handleRatingUpdate = (newRating: number) => {
+    // When a user submits a new rating, we need to update the course's overall rating
+    // and total number of ratings. This is a simplified update for the UI.
+    // In a real application, you'd likely refetch the course data or get this from the API response.
+    setCurrentRating(newRating);
+    setTotalRatings((prevTotal) => prevTotal + 1);
+    setShowRatingSection(false); // Close modal after update
+  };
+
+  const handleRatingClick = () => {
+    setShowRatingSection(true);
+    // No scrolling needed for modal
+  };
 
   return (
     <div className="min-h-screen bg-neutral">
@@ -336,7 +404,7 @@ export default function CourseDetail() {
                 {/* Course Info */}
                 <div className="mb-4">
                   <span className="inline-block px-3 py-1 bg-accent/90 text-white rounded-full text-sm font-medium mb-4">
-                    {course.categoryName || 'Général'}
+                    {course.categoryName || "Général"}
                   </span>
                 </div>
 
@@ -370,12 +438,17 @@ export default function CourseDetail() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <Users className="w-5 h-5" />
-                    <span>{course.students?.toLocaleString() || 0} étudiants</span>
+                    <span>
+                      {course.students?.toLocaleString() || 0} étudiants
+                    </span>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handleRatingClick}
+                    className="flex items-center space-x-2 cursor-pointer hover:text-yellow-300 transition-colors"
+                  >
                     <Star className="w-5 h-5 text-yellow-400" />
-                    <span>{course.rating?.toFixed(1) || 0}</span>
-                  </div>
+                    <span>{currentRating.toFixed(1)}</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -406,7 +479,8 @@ export default function CourseDetail() {
                   ></div>
                 </div>
                 <p className="text-sm text-gray-600">
-                  {getCompletedLessons()} sur {getTotalLessons()} leçons terminées
+                  {getCompletedLessons()} sur {getTotalLessons()} leçons
+                  terminées
                 </p>
               </div>
             )}
@@ -423,7 +497,8 @@ export default function CourseDetail() {
                   </h2>
                 </div>
                 <p className="text-purple-700 text-sm">
-                  Vous visualisez ce cours en tant qu'administrateur. Vous avez accès à toutes les fonctionnalités.
+                  Vous visualisez ce cours en tant qu'administrateur. Vous avez
+                  accès à toutes les fonctionnalités.
                 </p>
               </div>
             )}
@@ -434,9 +509,7 @@ export default function CourseDetail() {
                 À propos de ce cours
               </h2>
               <div className="prose prose-lg max-w-none text-gray-700">
-                <p className="mb-4">
-                  {course.description}
-                </p>
+                <p className="mb-4">{course.description}</p>
 
                 <h3 className="text-xl font-semibold text-textPrimary mt-8 mb-2">
                   Ce que vous allez apprendre
@@ -448,7 +521,9 @@ export default function CourseDetail() {
                   </li>
                   <li className="flex items-start space-x-3">
                     <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
-                    <span>Acquérir des compétences pratiques et applicables</span>
+                    <span>
+                      Acquérir des compétences pratiques et applicables
+                    </span>
                   </li>
                 </ul>
 
@@ -457,7 +532,10 @@ export default function CourseDetail() {
                 </h3>
                 <ul className="space-y-2">
                   <li>• Motivation pour apprendre et pratiquer</li>
-                  <li>• Un ordinateur ou une tablette ou un smartphone avec accès à Internet</li>
+                  <li>
+                    • Un ordinateur ou une tablette ou un smartphone avec accès
+                    à Internet
+                  </li>
                 </ul>
               </div>
             </div>
@@ -514,8 +592,11 @@ export default function CourseDetail() {
                                   {lesson.title}
                                 </h4>
                                 <p className="text-sm text-gray-600">
-                                  {lesson.contentType === 'VIDEO' ? 'Vidéo' : 
-                                   lesson.contentType === 'TEXT' ? 'Texte' : 'Document'}
+                                  {lesson.contentType === "VIDEO"
+                                    ? "Vidéo"
+                                    : lesson.contentType === "TEXT"
+                                    ? "Texte"
+                                    : "Document"}
                                 </p>
                               </div>
                             </div>
@@ -524,7 +605,7 @@ export default function CourseDetail() {
                                 to={`/player/${course.id}/${lesson.id}`}
                                 className="text-primary hover:text-primary/80 transition-colors text-sm font-medium"
                               >
-                                {isAdmin ? 'Prévisualiser' : 'Commencer'}
+                                {isAdmin ? "Prévisualiser" : "Commencer"}
                               </Link>
                             )}
                           </div>
@@ -540,6 +621,8 @@ export default function CourseDetail() {
                 )}
               </div>
             </div>
+
+            {/* Removed direct Course Rating Component rendering here */}
           </div>
 
           {/* Sidebar */}
@@ -547,10 +630,10 @@ export default function CourseDetail() {
             <div className="sticky top-24">
               {/* Enrollment Card */}
               <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8 mb-6">
-                {(enrolled || isAdmin) ? (
+                {enrolled || isAdmin ? (
                   <>
                     <h3 className="text-xl font-bold text-textPrimary mb-6">
-                      {isAdmin ? 'Aperçu Administrateur' : 'Votre parcours'}
+                      {isAdmin ? "Aperçu Administrateur" : "Votre parcours"}
                     </h3>
 
                     {/* Progress - Seulement pour les utilisateurs vraiment inscrits */}
@@ -579,26 +662,21 @@ export default function CourseDetail() {
                     >
                       <Play className="w-5 h-5" />
                       <span>
-                        {isAdmin 
-                          ? 'Prévisualiser le cours'
+                        {isAdmin
+                          ? "Prévisualiser le cours"
                           : progressPercentage && progressPercentage > 0
                           ? "Continuer le cours"
-                          : "Commencer le cours"
-                        }
+                          : "Commencer le cours"}
                       </span>
                     </Link>
 
-                    {isAdmin ? (
+                    {isAdmin ?? (
                       <Link
                         to={`/admin/course/edit/${course.id}`}
                         className="w-full border border-primary text-primary py-3 rounded-lg font-medium hover:bg-primary/10 transition-colors text-center block"
                       >
                         ⚙️ Modifier le cours
                       </Link>
-                    ) : (
-                      <button className="w-full border border-gray-300 text-textPrimary py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors">
-                        Télécharger les ressources
-                      </button>
                     )}
                   </>
                 ) : (
@@ -678,26 +756,45 @@ export default function CourseDetail() {
                   <div className="flex items-center justify-between">
                     <span className="text-gray-600">Dernière mise à jour</span>
                     <span className="font-medium">
-                      {course.updatedAt 
-                        ? new Date(course.updatedAt).toLocaleDateString('fr-FR', {
-                            month: 'long',
-                            year: 'numeric'
-                          })
-                        : 'Récemment'
-                      }
+                      {course.updatedAt
+                        ? new Date(course.updatedAt).toLocaleDateString(
+                            "fr-FR",
+                            {
+                              month: "long",
+                              year: "numeric",
+                            }
+                          )
+                        : "Récemment"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-600">Catégorie</span>
-                    <span className="font-medium">{course.categoryName || 'Général'}</span>
+                    <span className="font-medium">
+                      {course.categoryName || "Général"}
+                    </span>
                   </div>
                 </div>
               </div>
-
             </div>
           </div>
         </div>
       </div>
+
+      {/* Course Rating Modal */}
+      {id && (
+        <Modal isOpen={showRatingSection} onClose={() => setShowRatingSection(false)}>
+          <CourseRatingComponent
+            courseId={id}
+            isEnrolled={enrolled}
+            isAuthenticated={isAuthenticated}
+            currentRating={currentRating}
+            totalRatings={totalRatings}
+            onRatingUpdate={handleRatingUpdate}
+            initialShowForm={true} // Always show form when modal is open
+            onClose={() => setShowRatingSection(false)} // Pass onClose to component
+          />
+        </Modal>
+      )}
     </div>
   );
 }
